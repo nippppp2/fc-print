@@ -14,6 +14,7 @@ import {
   Clock,
   FileText,
   Image as ImageIcon,
+  LogOut,
 } from 'lucide-react';
 import { Order, OrderStatus } from '@/lib/types';
 
@@ -190,6 +191,20 @@ export default function AdminDashboardPage() {
           >
             <Settings size={16} />
             <span>Poster QR Toko</span>
+          </button>
+
+          <button
+            className="btn btn-secondary btn-sm"
+            style={{ color: '#dc2626' }}
+            onClick={async () => {
+              await fetch('/api/admin/logout', { method: 'POST' });
+              router.push('/admin/login');
+              router.refresh();
+            }}
+            title="Keluar dari sesi kasir"
+          >
+            <LogOut size={16} />
+            <span>Keluar</span>
           </button>
         </div>
       </header>

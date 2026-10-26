@@ -28,4 +28,5 @@ export interface StoreSettings {
   isOpen: boolean;
   maxFileSizeMb: number;
   maxFilesPerOrder: number;
+  adminPin?: string;
 }

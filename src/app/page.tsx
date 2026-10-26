@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   ChevronRight,
   Send,
+  Lock,
 } from 'lucide-react';
 import { StoreSettings } from '@/lib/types';
 import { DEFAULT_SETTINGS } from '@/lib/constants';
@@ -232,8 +233,10 @@ export default function CustomerUploadPage() {
         <button
           className="btn btn-secondary btn-sm"
           onClick={() => router.push('/admin')}
+          title="Login Kasir"
         >
-          Kasir
+          <Lock size={14} />
+          <span>Kasir</span>
         </button>
       </header>
 

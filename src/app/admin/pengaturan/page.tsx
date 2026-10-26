@@ -8,6 +8,7 @@ import {
   QrCode,
   Printer,
   CheckCircle2,
+  LogOut,
 } from 'lucide-react';
 import { StoreSettings } from '@/lib/types';
 import { DEFAULT_SETTINGS } from '@/lib/constants';
@@ -88,6 +89,18 @@ export default function AdminSettingsPage() {
           <ArrowLeft size={16} /> Kembali ke Antrean
         </button>
         <div style={{ fontWeight: 700, fontSize: '1rem' }}>Pengaturan & Poster QR Toko</div>
+        <button
+          className="btn btn-secondary btn-sm"
+          style={{ color: '#dc2626' }}
+          onClick={async () => {
+            await fetch('/api/admin/logout', { method: 'POST' });
+            router.push('/admin/login');
+            router.refresh();
+          }}
+          title="Keluar dari sesi kasir"
+        >
+          <LogOut size={16} /> Keluar
+        </button>
       </header>
 
       <main className="container" style={{ maxWidth: '720px' }}>
@@ -164,6 +177,22 @@ export default function AdminSettingsPage() {
                   value={settings.maxFilesPerOrder}
                   onChange={(e) => handleChange('maxFilesPerOrder', parseInt(e.target.value) || 10)}
                 />
+              </div>
+            </div>
+
+            <div className="option-group" style={{ marginTop: '1rem' }}>
+              <label className="option-label">PIN Keamanan Kasir (4–8 Digit)</label>
+              <input
+                type="text"
+                maxLength={10}
+                className="text-input"
+                style={{ fontFamily: 'monospace', fontWeight: 'bold', letterSpacing: '0.15em', maxWidth: '240px' }}
+                value={settings.adminPin || '1234'}
+                onChange={(e) => handleChange('adminPin', e.target.value)}
+                placeholder="1234"
+              />
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                PIN ini digunakan kasir saat membuka halaman antrean toko. Default: <strong>1234</strong>.
               </div>
             </div>
 

@@ -5,4 +5,5 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   isOpen: true,
   maxFileSizeMb: 25,
   maxFilesPerOrder: 10,
+  adminPin: '1234',
 };
