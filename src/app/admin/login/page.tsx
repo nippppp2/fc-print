@@ -3,7 +3,7 @@
 import React, { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Lock, Eye, EyeOff, ShieldCheck, Delete, ArrowLeft, Loader2 } from 'lucide-react';
+import { ShieldCheck, Eye, EyeOff, Delete, ArrowLeft, Lock, Loader2 } from 'lucide-react';
 
 function AdminLoginForm() {
   const router = useRouter();
@@ -22,7 +22,7 @@ function AdminLoginForm() {
     } else if (val === 'BACK') {
       setPin((prev) => prev.slice(0, -1));
     } else {
-      if (pin.length < 10) {
+      if (pin.length < 8) {
         setPin((prev) => prev + val);
       }
     }
@@ -48,14 +48,13 @@ function AdminLoginForm() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'PIN salah!');
+        throw new Error(data.error || 'PIN Kasir salah! Silakan coba lagi.');
       }
 
-      // Login berhasil -> Arahkan ke dashboard admin
       router.push(redirectPath);
       router.refresh();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Gagal masuk';
+      const msg = err instanceof Error ? err.message : 'PIN salah atau gagal verifikasi';
       setError(msg);
       setPin('');
     } finally {
@@ -64,27 +63,72 @@ function AdminLoginForm() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4">
-      <div className="w-full max-w-sm bg-slate-800 border border-slate-700/80 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur">
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1.5rem',
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+        fontFamily: 'var(--font-sans)',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '380px',
+          background: 'rgba(30, 41, 59, 0.88)',
+          backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          borderRadius: '24px',
+          padding: '2.25rem 1.75rem',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+          color: '#ffffff',
+        }}
+      >
         {/* Header */}
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner">
-            <ShieldCheck className="w-9 h-9" />
+        <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
+          <div
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '20px',
+              background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1rem',
+              boxShadow: '0 10px 20px -5px rgba(37, 99, 235, 0.5)',
+              color: '#ffffff',
+            }}
+          >
+            <ShieldCheck size={34} />
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Portal Kasir</h1>
-          <p className="text-slate-400 text-xs mt-1">
+          <h1
+            style={{
+              fontSize: '1.5rem',
+              fontWeight: 800,
+              letterSpacing: '-0.02em',
+              color: '#ffffff',
+              marginBottom: '0.35rem',
+            }}
+          >
+            Portal Kasir & Admin
+          </h1>
+          <p style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.4 }}>
             Masukkan PIN toko untuk mengakses antrean & dokumen
           </p>
         </div>
 
-        {/* Form PIN */}
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <div className="relative">
+        {/* Input PIN Display */}
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '1.25rem' }}>
+            <div style={{ position: 'relative' }}>
               <input
                 type={showPin ? 'text' : 'password'}
                 inputMode="numeric"
-                maxLength={10}
+                maxLength={8}
                 value={pin}
                 onChange={(e) => {
                   setPin(e.target.value);
@@ -92,33 +136,99 @@ function AdminLoginForm() {
                 }}
                 placeholder="••••"
                 autoFocus
-                className="w-full text-center tracking-[0.4em] text-2xl font-bold bg-slate-950/70 border border-slate-700 focus:border-blue-500 text-white rounded-2xl py-3.5 px-10 outline-none transition-all placeholder:text-slate-600"
+                style={{
+                  width: '100%',
+                  textAlign: 'center',
+                  letterSpacing: '0.35em',
+                  fontSize: '1.75rem',
+                  fontWeight: 800,
+                  fontFamily: 'var(--font-mono)',
+                  background: 'rgba(15, 23, 42, 0.85)',
+                  border: error ? '2px solid #ef4444' : '1px solid #334155',
+                  color: '#ffffff',
+                  borderRadius: '16px',
+                  padding: '0.85rem 2.75rem',
+                  outline: 'none',
+                  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.4)',
+                  transition: 'border-color 0.2s',
+                }}
               />
               <button
                 type="button"
                 onClick={() => setShowPin(!showPin)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-1 transition-colors"
-                title={showPin ? 'Sembunyikan PIN' : 'Tampilkan PIN'}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                title={showPin ? 'Sembunyikan PIN' : 'Lihat PIN'}
               >
-                {showPin ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                {showPin ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
 
             {error && (
-              <div className="mt-2.5 p-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs text-center font-medium animate-pulse">
+              <div
+                style={{
+                  marginTop: '0.75rem',
+                  padding: '0.65rem',
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '12px',
+                  color: '#fca5a5',
+                  fontSize: '0.8rem',
+                  textAlign: 'center',
+                  fontWeight: 600,
+                }}
+              >
                 {error}
               </div>
             )}
           </div>
 
           {/* Virtual Touch Keypad */}
-          <div className="grid grid-cols-3 gap-2.5 pt-1">
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '0.65rem',
+              marginBottom: '1.25rem',
+            }}
+          >
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
               <button
                 key={num}
                 type="button"
                 onClick={() => handleKeypadPress(num.toString())}
-                className="h-12 bg-slate-700/60 hover:bg-slate-700 active:bg-blue-600 text-white font-semibold text-lg rounded-xl transition-colors border border-slate-600/40"
+                style={{
+                  height: '52px',
+                  background: 'rgba(51, 65, 85, 0.6)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '14px',
+                  color: '#ffffff',
+                  fontSize: '1.35rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                }}
+                onMouseDown={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = '#2563eb';
+                  (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.96)';
+                }}
+                onMouseUp={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(51, 65, 85, 0.6)';
+                  (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
+                }}
               >
                 {num}
               </button>
@@ -126,54 +236,128 @@ function AdminLoginForm() {
             <button
               type="button"
               onClick={() => handleKeypadPress('CLEAR')}
-              className="h-12 bg-slate-800 hover:bg-slate-700/80 active:bg-slate-600 text-amber-400 font-bold text-xs uppercase tracking-wider rounded-xl transition-colors border border-slate-700"
+              style={{
+                height: '52px',
+                background: 'rgba(30, 41, 59, 0.8)',
+                border: '1px solid rgba(255, 255, 255, 0.05)',
+                borderRadius: '14px',
+                color: '#fbbf24',
+                fontSize: '0.85rem',
+                fontWeight: 800,
+                letterSpacing: '0.05em',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
             >
-              C
+              CLEAR
             </button>
             <button
               type="button"
               onClick={() => handleKeypadPress('0')}
-              className="h-12 bg-slate-700/60 hover:bg-slate-700 active:bg-blue-600 text-white font-semibold text-lg rounded-xl transition-colors border border-slate-600/40"
+              style={{
+                height: '52px',
+                background: 'rgba(51, 65, 85, 0.6)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '14px',
+                color: '#ffffff',
+                fontSize: '1.35rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+              }}
+              onMouseDown={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = '#2563eb';
+                (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.96)';
+              }}
+              onMouseUp={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(51, 65, 85, 0.6)';
+                (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
+              }}
             >
               0
             </button>
             <button
               type="button"
               onClick={() => handleKeypadPress('BACK')}
-              className="h-12 bg-slate-800 hover:bg-slate-700/80 active:bg-slate-600 text-slate-300 flex items-center justify-center rounded-xl transition-colors border border-slate-700"
+              style={{
+                height: '52px',
+                background: 'rgba(30, 41, 59, 0.8)',
+                border: '1px solid rgba(255, 255, 255, 0.05)',
+                borderRadius: '14px',
+                color: '#94a3b8',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
               title="Hapus Digit"
             >
-              <Delete className="w-5 h-5" />
+              <Delete size={22} />
             </button>
           </div>
 
+          {/* Submit Button */}
           <button
             type="submit"
             disabled={isLoading || pin.length === 0}
-            className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all text-sm mt-2"
+            style={{
+              width: '100%',
+              padding: '0.875rem 1rem',
+              background: isLoading || pin.length === 0 ? '#475569' : '#2563eb',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '16px',
+              fontSize: '0.95rem',
+              fontWeight: 700,
+              cursor: isLoading || pin.length === 0 ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              boxShadow:
+                isLoading || pin.length === 0 ? 'none' : '0 10px 15px -3px rgba(37, 99, 235, 0.4)',
+              transition: 'background-color 0.2s',
+            }}
           >
             {isLoading ? (
               <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Memverifikasi...
+                <Loader2 size={18} className="animate-spin" />
+                <span>Memverifikasi PIN...</span>
               </>
             ) : (
               <>
-                <Lock className="w-4 h-4" />
-                Masuk ke Dashboard Kasir
+                <Lock size={18} />
+                <span>Masuk ke Dashboard Kasir</span>
               </>
             )}
           </button>
         </form>
 
         {/* Back Link */}
-        <div className="mt-6 pt-5 border-t border-slate-700/60 text-center">
+        <div
+          style={{
+            marginTop: '1.5rem',
+            paddingTop: '1.25rem',
+            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+            textAlign: 'center',
+          }}
+        >
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              fontSize: '0.8rem',
+              color: '#94a3b8',
+              textDecoration: 'none',
+              transition: 'color 0.2s',
+            }}
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Kembali ke Halaman Kirim Dokumen
+            <ArrowLeft size={14} />
+            <span>Kembali ke Halaman Pelanggan</span>
           </Link>
         </div>
       </div>
@@ -185,8 +369,17 @@ export default function AdminLoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        <div
+          style={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#0f172a',
+            color: '#ffffff',
+          }}
+        >
+          <Loader2 size={32} className="animate-spin" style={{ color: '#3b82f6' }} />
         </div>
       }
     >
