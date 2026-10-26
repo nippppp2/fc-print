@@ -2,6 +2,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectsCommand } fr
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import fs from 'fs';
 import path from 'path';
+import { db } from './db';
 
 const accountId = process.env.R2_ACCOUNT_ID;
 const accessKeyId = process.env.R2_ACCESS_KEY_ID;
@@ -94,16 +95,6 @@ export async function deleteR2Files(storageKeys: string[]) {
     });
     await s3Client.send(command);
   } else {
-    // Hapus dari folder lokal
-    for (const key of storageKeys) {
-      const localPath = path.join(LOCAL_UPLOAD_DIR, key);
-      if (fs.existsSync(localPath)) {
-        try {
-          fs.unlinkSync(localPath);
-        } catch {
-          // ignore
-        }
-      }
-    }
+    await db.deleteFileBlobs(storageKeys);
   }
 }

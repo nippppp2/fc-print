@@ -58,6 +58,15 @@ async function ensureTables() {
         data JSONB NOT NULL
       );
     `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS file_blobs (
+        storage_key VARCHAR(128) PRIMARY KEY,
+        filename VARCHAR(255) NOT NULL,
+        content_type VARCHAR(100) NOT NULL,
+        base64_data TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
     tablesInitialized = true;
   } catch (err) {
     console.error('Gagal inisialisasi tabel Neon DB:', err);
@@ -207,6 +216,51 @@ export const db = {
     }
     return memoryStore.updateSettings(newSettings);
   },
+
+  async saveFileBlob(storageKey: string, filename: string, contentType: string, buffer: Buffer): Promise<void> {
+    if (sql) {
+      await ensureTables();
+      const base64Data = buffer.toString('base64');
+      await sql`
+        INSERT INTO file_blobs (storage_key, filename, content_type, base64_data)
+        VALUES (${storageKey}, ${filename}, ${contentType}, ${base64Data})
+        ON CONFLICT (storage_key) DO UPDATE SET base64_data = ${base64Data}, content_type = ${contentType};
+      `;
+      return;
+    }
+    return memoryStore.saveFileBlob(storageKey, filename, contentType, buffer);
+  },
+
+  async getFileBlob(storageKey: string): Promise<{ filename: string; contentType: string; buffer: Buffer } | null> {
+    if (sql) {
+      await ensureTables();
+      const rows = await sql`
+        SELECT storage_key, filename, content_type, base64_data 
+        FROM file_blobs 
+        WHERE storage_key = ${storageKey} 
+        LIMIT 1;
+      `;
+      if (rows.length === 0) return null;
+      return {
+        filename: rows[0].filename,
+        contentType: rows[0].content_type,
+        buffer: Buffer.from(rows[0].base64_data, 'base64'),
+      };
+    }
+    return memoryStore.getFileBlob(storageKey);
+  },
+
+  async deleteFileBlobs(storageKeys: string[]): Promise<void> {
+    if (storageKeys.length === 0) return;
+    if (sql) {
+      await ensureTables();
+      for (const key of storageKeys) {
+        await sql`DELETE FROM file_blobs WHERE storage_key = ${key};`;
+      }
+      return;
+    }
+    return memoryStore.deleteFileBlobs(storageKeys);
+  },
 };
 
 // ==========================================
@@ -282,6 +336,22 @@ class MemoryStore {
   updateSettings(newSettings: Partial<StoreSettings>): StoreSettings {
     this.settings = { ...this.settings, ...newSettings };
     return { ...this.settings };
+  }
+
+  private files: Map<string, { filename: string; contentType: string; buffer: Buffer }> = new Map();
+
+  saveFileBlob(storageKey: string, filename: string, contentType: string, buffer: Buffer): void {
+    this.files.set(storageKey, { filename, contentType, buffer });
+  }
+
+  getFileBlob(storageKey: string): { filename: string; contentType: string; buffer: Buffer } | null {
+    return this.files.get(storageKey) || null;
+  }
+
+  deleteFileBlobs(storageKeys: string[]): void {
+    for (const key of storageKeys) {
+      this.files.delete(key);
+    }
   }
 }
 
