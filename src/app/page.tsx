@@ -12,7 +12,6 @@ import {
   ShieldCheck,
   ChevronRight,
   Send,
-  Lock,
 } from 'lucide-react';
 import { StoreSettings } from '@/lib/types';
 import { DEFAULT_SETTINGS } from '@/lib/constants';
@@ -224,20 +223,12 @@ export default function CustomerUploadPage() {
             <Printer size={20} />
           </div>
           <div>
-            <div style={{ lineHeight: 1.2 }}>{settings.storeName}</div>
+            <div style={{ lineHeight: 1.2, fontWeight: 700 }}>{settings.storeName}</div>
             <div style={{ fontSize: '0.75rem', color: settings.isOpen ? '#059669' : '#dc2626', fontWeight: 600 }}>
               {settings.isOpen ? '● Menerima Cetak' : '● Sedang Tutup'}
             </div>
           </div>
         </div>
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={() => router.push('/admin')}
-          title="Login Kasir"
-        >
-          <Lock size={14} />
-          <span>Kasir</span>
-        </button>
       </header>
 
       <main className="container" style={{ maxWidth: '600px' }}>
