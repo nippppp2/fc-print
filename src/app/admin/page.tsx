@@ -27,6 +27,7 @@ export default function AdminDashboardPage() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [userRole, setUserRole] = useState<'SUPER_ADMIN' | 'KASIR' | null>(null);
 
   const prevOrderCountRef = useRef<number>(0);
 
@@ -80,6 +81,14 @@ export default function AdminDashboardPage() {
   };
 
   useEffect(() => {
+    // Cek peran login saat ini
+    fetch('/api/admin/session')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.role) setUserRole(data.role);
+      })
+      .catch(() => {});
+
     fetchOrders();
     const interval = setInterval(() => {
       fetchOrders(true);
@@ -167,6 +176,42 @@ export default function AdminDashboardPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          {userRole === 'SUPER_ADMIN' ? (
+            <span
+              style={{
+                padding: '0.3rem 0.75rem',
+                borderRadius: '9999px',
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                color: '#1d4ed8',
+                fontSize: '0.75rem',
+                fontWeight: 800,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+              }}
+            >
+              👑 Super Admin
+            </span>
+          ) : userRole === 'KASIR' ? (
+            <span
+              style={{
+                padding: '0.3rem 0.75rem',
+                borderRadius: '9999px',
+                background: '#f1f5f9',
+                border: '1px solid #cbd5e1',
+                color: '#334155',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+              }}
+            >
+              💼 Kasir
+            </span>
+          ) : null}
+
           <button
             className={`btn btn-sm ${soundEnabled ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setSoundEnabled(!soundEnabled)}
@@ -185,13 +230,15 @@ export default function AdminDashboardPage() {
             <span>Segarkan</span>
           </button>
 
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => router.push('/admin/pengaturan')}
-          >
-            <Settings size={16} />
-            <span>Poster QR Toko</span>
-          </button>
+          {userRole === 'SUPER_ADMIN' && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => router.push('/admin/pengaturan')}
+            >
+              <Settings size={16} />
+              <span>Poster QR & Pengaturan</span>
+            </button>
+          )}
 
           <button
             className="btn btn-secondary btn-sm"

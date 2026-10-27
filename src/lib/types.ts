@@ -23,10 +23,14 @@ export interface Order {
   filesDeletedAt?: string;
 }
 
+export type AdminRole = 'SUPER_ADMIN' | 'KASIR';
+
 export interface StoreSettings {
   storeName: string;
   isOpen: boolean;
   maxFileSizeMb: number;
   maxFilesPerOrder: number;
-  adminPin?: string;
+  kasirPin?: string;       // Default: '1234'
+  superAdminPin?: string;  // Default: '9999'
+  adminPin?: string;       // Backward compatibility fallback
 }
