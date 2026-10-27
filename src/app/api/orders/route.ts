@@ -7,7 +7,7 @@ import { getPresignedDownloadUrl } from '@/lib/r2';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { files } = body;
+    const { files, customerName } = body;
 
     if (!files || !Array.isArray(files) || files.length === 0) {
       return NextResponse.json(
@@ -15,6 +15,11 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    const cleanCustomerName =
+      typeof customerName === 'string' && customerName.trim()
+        ? customerName.trim().slice(0, 50)
+        : 'Pelanggan';
 
     const settings = await db.getSettings();
     if (!settings.isOpen) {
@@ -39,6 +44,7 @@ export async function POST(request: Request) {
       id: nanoid(16),
       queueNumber,
       trackingCode,
+      customerName: cleanCustomerName,
       status: 'PENDING',
       totalFiles: orderFiles.length,
       files: orderFiles,
@@ -51,6 +57,7 @@ export async function POST(request: Request) {
       success: true,
       queueNumber: newOrder.queueNumber,
       trackingCode: newOrder.trackingCode,
+      customerName: newOrder.customerName,
       orderId: newOrder.id,
     });
   } catch (err: unknown) {

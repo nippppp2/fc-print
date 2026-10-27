@@ -42,6 +42,7 @@ async function ensureTables() {
         id VARCHAR(64) PRIMARY KEY,
         queue_number VARCHAR(16) NOT NULL,
         tracking_code VARCHAR(32) NOT NULL UNIQUE,
+        customer_name VARCHAR(100) DEFAULT 'Pelanggan',
         status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
         total_files INTEGER NOT NULL DEFAULT 1,
         files JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -51,6 +52,10 @@ async function ensureTables() {
         completed_at TIMESTAMPTZ,
         files_deleted_at TIMESTAMPTZ
       );
+    `;
+    // Migrasi kolom jika tabel lama sudah ada
+    await sql`
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_name VARCHAR(100) DEFAULT 'Pelanggan';
     `;
     await sql`
       CREATE TABLE IF NOT EXISTS settings (
@@ -99,8 +104,8 @@ export const db = {
     if (sql) {
       await ensureTables();
       await sql`
-        INSERT INTO orders (id, queue_number, tracking_code, status, total_files, files, created_at)
-        VALUES (${order.id}, ${order.queueNumber}, ${order.trackingCode}, ${order.status}, ${order.totalFiles}, ${JSON.stringify(order.files)}, ${order.createdAt});
+        INSERT INTO orders (id, queue_number, tracking_code, customer_name, status, total_files, files, created_at)
+        VALUES (${order.id}, ${order.queueNumber}, ${order.trackingCode}, ${order.customerName || 'Pelanggan'}, ${order.status}, ${order.totalFiles}, ${JSON.stringify(order.files)}, ${order.createdAt});
       `;
       return order;
     }
@@ -119,6 +124,7 @@ export const db = {
         id: r.id,
         queueNumber: r.queue_number,
         trackingCode: r.tracking_code,
+        customerName: r.customer_name || 'Pelanggan',
         status: r.status as OrderStatus,
         totalFiles: r.total_files,
         files: typeof r.files === 'string' ? JSON.parse(r.files) : r.files,
@@ -142,6 +148,7 @@ export const db = {
         id: r.id,
         queueNumber: r.queue_number,
         trackingCode: r.tracking_code,
+        customerName: r.customer_name || 'Pelanggan',
         status: r.status as OrderStatus,
         totalFiles: r.total_files,
         files: typeof r.files === 'string' ? JSON.parse(r.files) : r.files,
@@ -177,6 +184,7 @@ export const db = {
         id: r.id,
         queueNumber: r.queue_number,
         trackingCode: r.tracking_code,
+        customerName: r.customer_name || 'Pelanggan',
         status: r.status as OrderStatus,
         totalFiles: r.total_files,
         files: typeof r.files === 'string' ? JSON.parse(r.files) : r.files,

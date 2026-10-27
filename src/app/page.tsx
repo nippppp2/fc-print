@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   ChevronRight,
   Send,
+  User,
 } from 'lucide-react';
 import { StoreSettings } from '@/lib/types';
 import { DEFAULT_SETTINGS } from '@/lib/constants';
@@ -32,12 +33,20 @@ export default function CustomerUploadPage() {
   const [activeOrder, setActiveOrder] = useState<{ queueNumber: string; trackingCode: string } | null>(null);
 
   const [files, setFiles] = useState<SelectedFileItem[]>([]);
+  const [customerName, setCustomerName] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // 1. Cek pesanan aktif di localStorage & verifikasi status ke server
+  // 1. Cek pesanan aktif & nama pelanggan di localStorage & verifikasi status ke server
   useEffect(() => {
+    try {
+      const cachedName = localStorage.getItem('fc_customer_name');
+      if (cachedName) setCustomerName(cachedName);
+    } catch {
+      // ignore
+    }
+
     try {
       const saved = localStorage.getItem('active_order');
       if (saved) {
@@ -126,9 +135,20 @@ export default function CustomerUploadPage() {
 
   // 3. Kirim Langsung Dokumen ke Admin via Presigned Upload R2
   const handleSubmit = async () => {
+    if (!customerName.trim()) {
+      setErrorMessage('Silakan isi Nama Pemesan agar kasir dapat memanggil Anda.');
+      return;
+    }
+
     if (files.length === 0) {
       setErrorMessage('Pilih minimal 1 file dokumen.');
       return;
+    }
+
+    try {
+      localStorage.setItem('fc_customer_name', customerName.trim());
+    } catch {
+      // ignore
     }
 
     setIsUploading(true);
@@ -185,6 +205,7 @@ export default function CustomerUploadPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           files: uploadedFiles,
+          customerName: customerName.trim(),
         }),
       });
 
@@ -282,6 +303,55 @@ export default function CustomerUploadPage() {
             <span>{errorMessage}</span>
           </div>
         )}
+
+        {/* Input Nama Pemesan */}
+        <div
+          className="card"
+          style={{
+            marginBottom: '1.25rem',
+            padding: '1.25rem',
+            background: 'white',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          <label
+            htmlFor="customerNameInput"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              fontSize: '0.9rem',
+              fontWeight: 700,
+              color: 'var(--text-primary)',
+              marginBottom: '0.45rem',
+            }}
+          >
+            <User size={17} color="var(--primary)" />
+            <span>Nama Pemesan / Panggilan</span>
+            <span style={{ color: '#dc2626' }}>*</span>
+          </label>
+          <input
+            id="customerNameInput"
+            type="text"
+            className="text-input"
+            placeholder="Contoh: Budi, Mbak Rina, Mas Dimas..."
+            value={customerName}
+            maxLength={40}
+            onChange={(e) => {
+              setCustomerName(e.target.value);
+              if (errorMessage) setErrorMessage('');
+            }}
+            style={{
+              fontSize: '0.95rem',
+              fontWeight: 500,
+            }}
+          />
+          <div style={{ fontSize: '0.775rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
+            Nama panggilan ini akan dipanggil kasir saat hasil cetakan Anda siap diambil.
+          </div>
+        </div>
 
         {/* Area Pilih Dokumen */}
         <div

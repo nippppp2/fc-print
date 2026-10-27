@@ -13,6 +13,7 @@ export interface Order {
   id: string;
   queueNumber: string; // e.g., 'A-001'
   trackingCode: string; // Unguessable tracking id
+  customerName?: string; // Nama pemesan / panggilan
   status: OrderStatus;
   totalFiles: number;
   files: OrderFileConfig[];

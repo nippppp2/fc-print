@@ -152,8 +152,9 @@ export default function AdminDashboardPage() {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchQueue = order.queueNumber.toLowerCase().includes(q);
+      const matchName = order.customerName ? order.customerName.toLowerCase().includes(q) : false;
       const matchFile = order.files.some((f) => f.originalFilename.toLowerCase().includes(q));
-      if (!matchQueue && !matchFile) return false;
+      if (!matchQueue && !matchName && !matchFile) return false;
     }
 
     return true;
@@ -308,7 +309,7 @@ export default function AdminDashboardPage() {
             />
             <input
               type="text"
-              placeholder="Cari nomor antrean atau file..."
+              placeholder="Cari nama pemesan, antrean, atau file..."
               className="text-input"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -366,10 +367,30 @@ export default function AdminDashboardPage() {
                     {/* Header Kartu */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
                       <div>
-                        <div style={{ fontSize: '1.85rem', fontWeight: 900, color: 'var(--primary)', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
-                          {order.queueNumber}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '1.85rem', fontWeight: 900, color: 'var(--primary)', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
+                            {order.queueNumber}
+                          </span>
+                          {order.customerName && (
+                            <span
+                              style={{
+                                fontSize: '1rem',
+                                fontWeight: 800,
+                                color: '#1e293b',
+                                background: '#f1f5f9',
+                                border: '1px solid #cbd5e1',
+                                padding: '0.2rem 0.65rem',
+                                borderRadius: 'var(--radius-sm)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.35rem',
+                              }}
+                            >
+                              👤 {order.customerName}
+                            </span>
+                          )}
                         </div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
                           Total: {order.files.length} Dokumen
                         </div>
                       </div>

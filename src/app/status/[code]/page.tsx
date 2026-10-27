@@ -176,6 +176,27 @@ function OrderStatusContent({
 
           <div className="queue-giant">{order.queueNumber}</div>
 
+          {order.customerName && (
+            <div
+              style={{
+                fontSize: '1rem',
+                fontWeight: 600,
+                color: 'var(--text-secondary)',
+                marginBottom: '1rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                padding: '0.35rem 0.85rem',
+                borderRadius: '9999px',
+              }}
+            >
+              <span>Pesanan a.n:</span>
+              <strong style={{ color: 'var(--text-primary)' }}>{order.customerName}</strong>
+            </div>
+          )}
+
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
             {getStatusBadge(order.status)}
           </div>
