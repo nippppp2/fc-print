@@ -310,6 +310,15 @@ export default function AdminDashboardPage() {
     );
     const isThisDragged = draggedOrderId === order.id;
 
+    const statusAccentColor =
+      order.status === 'READY'
+        ? '#84cc16'
+        : order.status === 'PRINTING'
+        ? '#0284c7'
+        : order.status === 'COMPLETED'
+        ? '#94a3b8'
+        : '#f59e0b';
+
     return (
       <div
         key={order.id}
@@ -317,17 +326,21 @@ export default function AdminDashboardPage() {
         onDragStart={(e) => handleDragStart(e, order)}
         onDragEnd={handleDragEnd}
         className={`kanban-card ${isThisDragged ? 'is-dragging' : ''}`}
-        style={{
-          borderLeft:
-            order.status === 'READY'
-              ? '5px solid #84cc16'
-              : order.status === 'PRINTING'
-              ? '5px solid #0284c7'
-              : order.status === 'COMPLETED'
-              ? '5px solid #94a3b8'
-              : '5px solid #f59e0b',
-        }}
       >
+        {/* Indikator Status Warna di Sisi Kiri Kartu */}
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: '6px',
+            backgroundColor: statusAccentColor,
+            borderTopLeftRadius: '16px',
+            borderBottomLeftRadius: '16px',
+          }}
+        />
+
         {/* Header Kartu */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.65rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
