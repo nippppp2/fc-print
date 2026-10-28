@@ -15,6 +15,18 @@ export async function PUT(request: Request) {
     const arrayBuffer = await request.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    // Batas aman payload serverless & database (25 MB)
+    const MAX_SAFE_BYTES = 25 * 1024 * 1024;
+    if (buffer.length > MAX_SAFE_BYTES) {
+      const sizeMb = (buffer.length / (1024 * 1024)).toFixed(1);
+      return NextResponse.json(
+        {
+          error: `Ukuran berkas "${filename}" (${sizeMb} MB) melebihi batas maksimal 25 MB. Silakan kompres berkas Anda agar pengiriman lancar.`,
+        },
+        { status: 413 }
+      );
+    }
+
     // Simpan file blob ke database (Neon PostgreSQL) atau memory fallback
     await db.saveFileBlob(key, filename, contentType, buffer);
 

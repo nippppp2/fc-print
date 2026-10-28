@@ -210,15 +210,21 @@ export default function AdminSettingsPage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
               <div className="option-group">
-                <label className="option-label">Batas Ukuran per Dokumen (MB)</label>
+                <label className="option-label">Batas Ukuran per Dokumen (Maks. 25 MB)</label>
                 <input
                   type="number"
                   min={1}
-                  max={100}
+                  max={25}
                   className="text-input"
-                  value={settings.maxFileSizeMb}
-                  onChange={(e) => handleChange('maxFileSizeMb', parseInt(e.target.value) || 25)}
+                  value={Math.min(settings.maxFileSizeMb || 25, 25)}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 25;
+                    handleChange('maxFileSizeMb', Math.min(Math.max(val, 1), 25));
+                  }}
                 />
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                  Batas aman: Maks. <strong>25 MB</strong> per file agar proses unggah stabil dan tidak terputus.
+                </div>
               </div>
 
               <div className="option-group">

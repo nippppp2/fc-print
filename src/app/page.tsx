@@ -94,7 +94,8 @@ export default function CustomerUploadPage() {
 
     const newFilesList = Array.from(e.target.files);
     const maxFiles = settings.maxFilesPerOrder || 10;
-    const maxBytes = (settings.maxFileSizeMb || 25) * 1024 * 1024;
+    const safeMaxMb = Math.min(settings.maxFileSizeMb || 25, 25);
+    const maxBytes = safeMaxMb * 1024 * 1024;
 
     if (files.length + newFilesList.length > maxFiles) {
       setErrorMessage(`Maksimal ${maxFiles} file per pesanan.`);
@@ -105,7 +106,8 @@ export default function CustomerUploadPage() {
 
     for (const f of newFilesList) {
       if (f.size > maxBytes) {
-        setErrorMessage(`File "${f.name}" melebihi batas ukuran ${settings.maxFileSizeMb} MB.`);
+        const fileMb = (f.size / (1024 * 1024)).toFixed(1);
+        setErrorMessage(`File "${f.name}" (${fileMb} MB) melebihi batas maksimal ${safeMaxMb} MB. Silakan kompres dokumen terlebih dahulu.`);
         return;
       }
 
@@ -375,7 +377,7 @@ export default function CustomerUploadPage() {
               Pilih Dokumen dari HP
             </div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-              Mendukung PDF, Word (DOCX), dan Foto (Maks. {settings.maxFileSizeMb} MB)
+              Mendukung PDF, Word (DOCX), dan Foto (Maks. {Math.min(settings.maxFileSizeMb || 25, 25)} MB)
             </div>
           </div>
           <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: '0.5rem' }}>
