@@ -26,6 +26,8 @@ import {
   Store,
   ChevronRight,
   TrendingUp,
+  AlertCircle,
+  Lock,
 } from 'lucide-react';
 import { Order, OrderStatus, StoreSettings } from '@/lib/types';
 import { DEFAULT_SETTINGS } from '@/lib/constants';
@@ -47,11 +49,60 @@ export default function AdminDashboardPage() {
 
   // Drag & Drop State
   const [draggedOrderId, setDraggedOrderId] = useState<string | null>(null);
+  const [draggedOrder, setDraggedOrder] = useState<Order | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<OrderStatus | null>(null);
+
+  // Toast Warning State
+  const [toastWarning, setToastWarning] = useState<string | null>(null);
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Peta alur status: Wajib berurutan tahap demi tahap dan dilarang keras mundur
+  const NEXT_VALID_STATUS: Record<OrderStatus, OrderStatus | null> = {
+    PENDING: 'PRINTING',
+    PRINTING: 'READY',
+    READY: 'COMPLETED',
+    COMPLETED: null,
+    CANCELLED: null,
+  };
+
+  const STATUS_LABELS: Record<OrderStatus, string> = {
+    PENDING: 'Menunggu Cetak',
+    PRINTING: 'Sedang Diproses',
+    READY: 'Siap Diambil',
+    COMPLETED: 'Selesai',
+    CANCELLED: 'Dibatalkan',
+  };
+
+  const showToastWarning = (msg: string) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToastWarning(msg);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastWarning(null);
+    }, 4000);
+  };
 
   const prevOrderCountRef = useRef<number>(0);
 
   // Web Audio Synthesizer Effects
+  const playErrorTone = () => {
+    if (!soundEnabled) return;
+    try {
+      const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(220, audioCtx.currentTime);
+      osc.frequency.setValueAtTime(160, audioCtx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.25);
+    } catch {
+      // Audio autoplay policy
+    }
+  };
   const playNewOrderChime = () => {
     if (!soundEnabled) return;
     try {
@@ -228,17 +279,31 @@ export default function AdminDashboardPage() {
   // DRAG & DROP HANDLERS (Interaktif & Fluid)
   // ==========================================
   const handleDragStart = (e: React.DragEvent, order: Order) => {
+    if (order.status === 'COMPLETED' || order.status === 'CANCELLED') {
+      e.preventDefault();
+      showToastWarning(`Pesanan ${order.queueNumber} sudah selesai dan tidak dapat dipindahkan.`);
+      return;
+    }
     e.dataTransfer.setData('text/plain', order.id);
     e.dataTransfer.effectAllowed = 'move';
     setDraggedOrderId(order.id);
+    setDraggedOrder(order);
     playPickupSound();
   };
 
   const handleDragOver = (e: React.DragEvent, targetStatus: OrderStatus) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (dragOverColumn !== targetStatus) {
-      setDragOverColumn(targetStatus);
+    const nextValid = draggedOrder ? NEXT_VALID_STATUS[draggedOrder.status] : null;
+    if (targetStatus === nextValid) {
+      e.dataTransfer.dropEffect = 'move';
+      if (dragOverColumn !== targetStatus) {
+        setDragOverColumn(targetStatus);
+      }
+    } else {
+      e.dataTransfer.dropEffect = 'none';
+      if (dragOverColumn === targetStatus) {
+        setDragOverColumn(null);
+      }
     }
   };
 
@@ -255,25 +320,42 @@ export default function AdminDashboardPage() {
     if (!orderId) return;
 
     const targetOrder = orders.find((o) => o.id === orderId);
-    if (!targetOrder || targetOrder.status === targetStatus) {
+    if (!targetOrder) {
       setDraggedOrderId(null);
+      setDraggedOrder(null);
       return;
     }
 
-    // Mainkan efek suara
+    const nextValid = NEXT_VALID_STATUS[targetOrder.status];
+
+    // Dilarang keras memundurkan status atau melompat tahap!
+    if (targetStatus !== nextValid) {
+      setDraggedOrderId(null);
+      setDraggedOrder(null);
+      playErrorTone();
+      const nextLabel = nextValid ? STATUS_LABELS[nextValid] : 'Selesai';
+      showToastWarning(
+        `Pesanan ${targetOrder.queueNumber} hanya dapat dimajukan ke tahap "${nextLabel}". Status tidak dapat dimundurkan.`
+      );
+      return;
+    }
+
+    // Transisi sah
     playDropSound(targetStatus);
 
-    // Fitur Rekomendasi: Jika ditarik ke 'Sedang Diproses' (PRINTING), otomatis langsung unduh dokumen
+    // Otomatis download berkas saat mulai proses cetak
     if (targetStatus === 'PRINTING') {
       downloadAllFiles(targetOrder.files);
     }
 
     await updateOrderStatus(orderId, targetStatus);
     setDraggedOrderId(null);
+    setDraggedOrder(null);
   };
 
   const handleDragEnd = () => {
     setDraggedOrderId(null);
+    setDraggedOrder(null);
     setDragOverColumn(null);
   };
 
@@ -319,13 +401,18 @@ export default function AdminDashboardPage() {
         ? '#94a3b8'
         : '#f59e0b';
 
+    const isFinalStatus = order.status === 'COMPLETED' || order.status === 'CANCELLED';
+
     return (
       <div
         key={order.id}
-        draggable
+        draggable={!isFinalStatus}
         onDragStart={(e) => handleDragStart(e, order)}
         onDragEnd={handleDragEnd}
         className={`kanban-card ${isThisDragged ? 'is-dragging' : ''}`}
+        style={{
+          cursor: isFinalStatus ? 'default' : 'grab',
+        }}
       >
         {/* Indikator Status Warna di Sisi Kiri Kartu */}
         <div
@@ -371,14 +458,49 @@ export default function AdminDashboardPage() {
             <span style={{ fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '3px' }}>
               <Clock size={11} /> {minutesAgo === 0 ? 'Baru' : `${minutesAgo}m`}
             </span>
-            <GripVertical size={16} style={{ color: '#cbd5e1', cursor: 'grab' }} />
+            {isFinalStatus ? (
+              <span title="Pesanan Selesai (Status Final)" style={{ display: 'inline-flex' }}>
+                <Lock size={14} style={{ color: '#94a3b8' }} />
+              </span>
+            ) : (
+              <span title="Seret untuk memajukan status" style={{ display: 'inline-flex', cursor: 'grab' }}>
+                <GripVertical size={16} style={{ color: '#cbd5e1' }} />
+              </span>
+            )}
           </div>
         </div>
 
         {/* Ringkasan File & Detail Unduhan */}
         <div style={{ marginBottom: '0.75rem' }}>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.45rem', fontWeight: 600 }}>
-            {order.files.length} Dokumen Lampiran:
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+              {order.files.length} Dokumen Lampiran:
+            </span>
+            {order.files.length > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  downloadAllFiles(order.files);
+                }}
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  padding: '0.2rem 0.5rem',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  color: '#0284c7',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+                title="Unduh semua berkas pesanan ini sekaligus"
+              >
+                <Download size={11} color="#0284c7" /> Unduh Semua ({order.files.length})
+              </button>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
             {order.files.map((file, idx) => (
@@ -495,8 +617,24 @@ export default function AdminDashboardPage() {
           )}
 
           {order.status === 'COMPLETED' && (
-            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <PackageCheck size={13} color="#10b981" /> Pesanan telah selesai diambil
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <PackageCheck size={13} color="#10b981" /> Selesai diambil
+              </div>
+              {order.files.length > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    downloadAllFiles(order.files);
+                  }}
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.7rem', padding: '0.2rem 0.55rem', gap: '4px', borderRadius: '6px' }}
+                  title="Unduh ulang semua berkas"
+                >
+                  <Download size={11} color="var(--primary)" /> Unduh Lagi
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -966,6 +1104,51 @@ export default function AdminDashboardPage() {
               </div>
             )}
           </section>
+        )}
+
+        {/* Floating Toast Peringatan Alur Status */}
+        {toastWarning && (
+          <div
+            style={{
+              position: 'fixed',
+              bottom: '24px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: '#0f172a',
+              color: '#ffffff',
+              border: '1.5px solid #ef4444',
+              borderRadius: '9999px',
+              padding: '0.75rem 1.4rem',
+              boxShadow: '0 12px 30px -4px rgba(0, 0, 0, 0.45)',
+              zIndex: 100,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.65rem',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              animation: 'land-spring 0.3s ease-out',
+              maxWidth: '90vw',
+            }}
+          >
+            <AlertCircle size={18} color="#f87171" style={{ flexShrink: 0 }} />
+            <span>{toastWarning}</span>
+            <button
+              type="button"
+              onClick={() => setToastWarning(null)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#94a3b8',
+                cursor: 'pointer',
+                padding: '0 4px',
+                fontSize: '1rem',
+                marginLeft: '0.5rem',
+              }}
+              title="Tutup pesan"
+            >
+              ✕
+            </button>
+          </div>
         )}
       </main>
     </>

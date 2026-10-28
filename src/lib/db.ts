@@ -138,6 +138,32 @@ export const db = {
     return memoryStore.getOrderByTrackingCode(trackingCode);
   },
 
+  async getOrderById(id: string): Promise<Order | undefined> {
+    if (sql) {
+      await ensureTables();
+      const rows = await sql`
+        SELECT * FROM orders WHERE id = ${id} LIMIT 1;
+      `;
+      if (rows.length === 0) return undefined;
+      const r = rows[0];
+      return {
+        id: r.id,
+        queueNumber: r.queue_number,
+        trackingCode: r.tracking_code,
+        customerName: r.customer_name || 'Pelanggan',
+        status: r.status as OrderStatus,
+        totalFiles: r.total_files,
+        files: typeof r.files === 'string' ? JSON.parse(r.files) : r.files,
+        createdAt: r.created_at,
+        printingAt: r.printing_at,
+        readyAt: r.ready_at,
+        completedAt: r.completed_at,
+        filesDeletedAt: r.files_deleted_at,
+      };
+    }
+    return memoryStore.getOrderById(id);
+  },
+
   async getAllOrders(): Promise<Order[]> {
     if (sql) {
       await ensureTables();
