@@ -179,6 +179,29 @@ export async function getGDriveFastDownload(fileId: string): Promise<{
  */
 export const getGDriveFileStream = getGDriveFastDownload;
 
+export async function ensureGDriveFilePublic(fileId: string): Promise<void> {
+  try {
+    const accessToken = await getGoogleAccessToken();
+    await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        role: 'reader',
+        type: 'anyone',
+      }),
+    });
+  } catch (err) {
+    console.warn(`Gagal menyetel permission publik file ${fileId}:`, err);
+  }
+}
+
+export function getGDriveDirectDownloadLink(fileId: string): string {
+  return `https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download`;
+}
+
 /**
  * Menghasilkan endpoint unduh langsung ke perangkat lokal (Downloads)
  * Alih-alih dialihkan ke situs web Google Drive

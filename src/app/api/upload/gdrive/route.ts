@@ -3,6 +3,7 @@ import {
   initiateGDriveResumableUpload,
   sendGDriveChunk,
   isGDriveConfigured,
+  ensureGDriveFilePublic,
 } from '@/lib/gdrive';
 
 export async function POST(request: Request) {
@@ -62,6 +63,7 @@ export async function PUT(request: Request) {
     const result = await sendGDriveChunk(sessionUri, chunkBuffer, contentRange);
 
     if (result.status === 'complete' && result.fileId) {
+      await ensureGDriveFilePublic(result.fileId);
       return NextResponse.json({
         success: true,
         status: 'complete',

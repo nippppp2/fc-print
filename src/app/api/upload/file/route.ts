@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getGDriveFastDownload } from '@/lib/gdrive';
+import { getGDriveDirectDownloadLink } from '@/lib/gdrive';
 
 export async function PUT(request: Request) {
   try {
@@ -53,31 +53,12 @@ export async function GET(request: Request) {
       return new NextResponse('Storage key tidak ditemukan', { status: 400 });
     }
 
-    // Jika file tersimpan di Google Drive, stream langsung dari Google Drive dengan performa tinggi
+    // Jika file tersimpan di Google Drive, alihkan (302 Redirect) langsung ke CDN Google Drive
+    // Ini mengeliminasi batas timeout 26 detik serverless Netlify sehingga berkas 50 MB - 500 MB terunduh 100% utuh tanpa terpotong
     if (key.startsWith('gdrive:')) {
       const fileId = key.replace('gdrive:', '');
-      const { body, contentType, contentLength } = await getGDriveFastDownload(fileId);
-
-      if (!body) {
-        return new NextResponse('Gagal membaca aliran data dari Google Drive', { status: 502 });
-      }
-
-      const downloadFilename = filename || 'dokumen';
-      const cleanFilename = downloadFilename.replace(/["\r\n]/g, '_');
-      const encodedFilename = encodeURIComponent(downloadFilename);
-
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/octet-stream',
-        'Content-Disposition': `attachment; filename="${cleanFilename}"; filename*=UTF-8''${encodedFilename}`,
-        'Cache-Control': 'no-transform, private, no-cache',
-        'X-Content-Type-Options': 'nosniff',
-      };
-
-      if (contentLength) {
-        headers['Content-Length'] = contentLength;
-      }
-
-      return new NextResponse(body, { headers });
+      const directUrl = getGDriveDirectDownloadLink(fileId);
+      return NextResponse.redirect(directUrl, 302);
     }
 
     const fileBlob = await db.getFileBlob(key);
