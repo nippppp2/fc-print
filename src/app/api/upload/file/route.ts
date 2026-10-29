@@ -65,10 +65,14 @@ export async function GET(request: Request) {
         },
       });
 
+      const downloadFilename = filename || gName || 'dokumen';
+      const cleanFilename = downloadFilename.replace(/["\r\n]/g, '_');
+      const encodedFilename = encodeURIComponent(downloadFilename);
+
       return new NextResponse(webStream, {
         headers: {
           'Content-Type': gContentType || 'application/octet-stream',
-          'Content-Disposition': `attachment; filename="${encodeURIComponent(filename || gName)}"`,
+          'Content-Disposition': `attachment; filename="${cleanFilename}"; filename*=UTF-8''${encodedFilename}`,
         },
       });
     }

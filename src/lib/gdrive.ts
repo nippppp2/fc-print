@@ -180,26 +180,10 @@ export async function getGDriveFileStream(fileId: string): Promise<{
 }
 
 /**
- * Mendapatkan direct link Google Drive untuk dilihat / diunduh
+ * Menghasilkan endpoint unduh langsung ke perangkat lokal (Downloads)
+ * Alih-alih dialihkan ke situs web Google Drive
  */
 export async function getGDriveDownloadUrl(fileId: string, filename?: string): Promise<string> {
-  // Direct link ke Google Drive viewer atau direct download
-  // Jika file disetel publik/anyone with link, bisa langsung dibuka di Drive
-  const drive = getDriveClient();
-  if (drive) {
-    try {
-      const meta = await drive.files.get({
-        fileId,
-        fields: 'id, name, webViewLink, webContentLink',
-      });
-      if (meta.data.webViewLink) {
-        return meta.data.webViewLink;
-      }
-    } catch {
-      // ignore
-    }
-  }
-
   const fnParam = filename ? `&filename=${encodeURIComponent(filename)}` : '';
   return `/api/upload/file?key=${encodeURIComponent(`gdrive:${fileId}`)}${fnParam}`;
 }
