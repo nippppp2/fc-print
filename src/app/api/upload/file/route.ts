@@ -67,9 +67,10 @@ export async function GET(request: Request) {
       const encodedFilename = encodeURIComponent(downloadFilename);
 
       const headers: Record<string, string> = {
-        'Content-Type': contentType,
+        'Content-Type': 'application/octet-stream',
         'Content-Disposition': `attachment; filename="${cleanFilename}"; filename*=UTF-8''${encodedFilename}`,
-        'Cache-Control': 'private, max-age=3600',
+        'Cache-Control': 'no-transform, private, no-cache',
+        'X-Content-Type-Options': 'nosniff',
       };
 
       if (contentLength) {

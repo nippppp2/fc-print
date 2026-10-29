@@ -28,6 +28,7 @@ import {
   TrendingUp,
   AlertCircle,
   Lock,
+  ExternalLink,
 } from 'lucide-react';
 import { Order, OrderStatus, StoreSettings } from '@/lib/types';
 import { DEFAULT_SETTINGS } from '@/lib/constants';
@@ -543,29 +544,56 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {file.downloadUrl && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      triggerDownload(file.downloadUrl!, file.originalFilename);
-                    }}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '6px',
-                      padding: '0.2rem 0.45rem',
-                      fontSize: '0.7rem',
-                      fontWeight: 600,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '3px',
-                      cursor: 'pointer',
-                      color: 'var(--text-primary)',
-                    }}
-                    title="Unduh file ini"
-                  >
-                    <Download size={11} color="#0284c7" /> Unduh
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {file.storageKey?.startsWith('gdrive:') && (
+                      <a
+                        href={`https://drive.google.com/file/d/${file.storageKey.replace('gdrive:', '')}/view`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          background: '#eff6ff',
+                          border: '1px solid #bfdbfe',
+                          borderRadius: '6px',
+                          padding: '0.2rem 0.45rem',
+                          fontSize: '0.7rem',
+                          fontWeight: 600,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          cursor: 'pointer',
+                          color: 'var(--primary)',
+                          textDecoration: 'none',
+                        }}
+                        title="Buka pratinjau di Google Drive"
+                      >
+                        <ExternalLink size={11} /> Drive
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        triggerDownload(file.downloadUrl!, file.originalFilename);
+                      }}
+                      style={{
+                        background: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                        padding: '0.2rem 0.45rem',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        cursor: 'pointer',
+                        color: 'var(--text-primary)',
+                      }}
+                      title="Unduh langsung ke perangkat ini"
+                    >
+                      <Download size={11} color="#0284c7" /> Unduh
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
