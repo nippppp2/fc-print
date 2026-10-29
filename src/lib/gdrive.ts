@@ -7,22 +7,55 @@ const rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY;
 const privateKey = rawPrivateKey ? rawPrivateKey.replace(/\\n/g, '\n') : undefined;
 const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
 
-export const isGDriveConfigured = Boolean(clientEmail && privateKey && folderId);
+// Dukungan OAuth 2.0 (agar menggunakan kuota 15 GB asli akun Gmail pengguna)
+const clientId = process.env.GOOGLE_CLIENT_ID;
+const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+
+const isOAuthReady = Boolean(clientId && clientSecret && refreshToken && folderId);
+const isServiceAccountReady = Boolean(clientEmail && privateKey && folderId);
+
+export const isGDriveConfigured = Boolean(isOAuthReady || isServiceAccountReady);
 
 export function getGoogleAuth() {
   if (!isGDriveConfigured) return null;
 
-  return new google.auth.JWT({
-    email: clientEmail,
-    key: privateKey,
-    scopes: ['https://www.googleapis.com/auth/drive'],
-  });
+  // Prioritaskan OAuth 2.0 jika tersedia (menggunakan kuota 15 GB akun pengguna)
+  if (isOAuthReady) {
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
+    return oauth2Client;
+  }
+
+  // Fallback ke Service Account (jika akun Google Workspace / Shared Drive)
+  if (clientEmail && privateKey) {
+    return new google.auth.JWT({
+      email: clientEmail,
+      key: privateKey,
+      scopes: ['https://www.googleapis.com/auth/drive'],
+    });
+  }
+
+  return null;
 }
 
 export function getDriveClient() {
   const auth = getGoogleAuth();
   if (!auth) return null;
   return google.drive({ version: 'v3', auth });
+}
+
+async function getGoogleAccessToken(): Promise<string> {
+  const auth = getGoogleAuth();
+  if (!auth) {
+    throw new Error('Google Drive belum dikonfigurasi (cek GOOGLE_CLIENT_ID / GOOGLE_SERVICE_ACCOUNT_EMAIL)');
+  }
+  const tokenRes = await auth.getAccessToken();
+  const token = typeof tokenRes === 'string' ? tokenRes : tokenRes?.token;
+  if (!token) {
+    throw new Error('Gagal mendapatkan access token Google Drive');
+  }
+  return token;
 }
 
 /**
@@ -33,15 +66,7 @@ export async function initiateGDriveResumableUpload(
   fileType: string,
   fileSize?: number
 ): Promise<{ sessionUri: string }> {
-  const auth = getGoogleAuth();
-  if (!auth) {
-    throw new Error('Google Drive belum dikonfigurasi (cek GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, GOOGLE_DRIVE_FOLDER_ID)');
-  }
-
-  const token = await auth.authorize();
-  if (!token.access_token) {
-    throw new Error('Gagal mendapatkan access token Google Drive');
-  }
+  const accessToken = await getGoogleAccessToken();
 
   const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
   const datePrefix = new Date().toISOString().slice(0, 10);
@@ -53,7 +78,7 @@ export async function initiateGDriveResumableUpload(
   };
 
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${token.access_token}`,
+    Authorization: `Bearer ${accessToken}`,
     'Content-Type': 'application/json; charset=UTF-8',
     'X-Upload-Content-Type': fileType || 'application/octet-stream',
   };
@@ -89,20 +114,12 @@ export async function sendGDriveChunk(
   chunkBuffer: Buffer,
   contentRange: string
 ): Promise<{ status: 'incomplete' | 'complete'; fileId?: string; webViewLink?: string }> {
-  const auth = getGoogleAuth();
-  if (!auth) {
-    throw new Error('Google Drive belum dikonfigurasi');
-  }
-
-  const token = await auth.authorize();
-  if (!token.access_token) {
-    throw new Error('Gagal mendapatkan access token Google Drive');
-  }
+  const accessToken = await getGoogleAccessToken();
 
   const res = await fetch(sessionUri, {
     method: 'PUT',
     headers: {
-      Authorization: `Bearer ${token.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       'Content-Length': chunkBuffer.length.toString(),
       'Content-Range': contentRange,
     },
