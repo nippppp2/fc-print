@@ -13,6 +13,8 @@ import {
   ChevronRight,
   Send,
   User,
+  Plus,
+  Clock,
 } from 'lucide-react';
 import { StoreSettings } from '@/lib/types';
 import { DEFAULT_SETTINGS } from '@/lib/constants';
@@ -34,6 +36,7 @@ export default function CustomerUploadPage() {
 
   const [files, setFiles] = useState<SelectedFileItem[]>([]);
   const [customerName, setCustomerName] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
@@ -87,28 +90,29 @@ export default function CustomerUploadPage() {
       .catch(() => {});
   }, []);
 
-  // 2. Handle Pemilihan File
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
-    setErrorMessage('');
+  // 2. Validasi & Tambah File (mendukung klik & drag-and-drop)
+  const processIncomingFiles = (incomingList: File[]) => {
+    if (!settings.isOpen) {
+      setErrorMessage('Mohon maaf, toko sedang tutup sementara waktu.');
+      return;
+    }
 
-    const newFilesList = Array.from(e.target.files);
+    setErrorMessage('');
     const maxFiles = settings.maxFilesPerOrder || 10;
     const isCloudStorage = settings.storageProvider === 'gdrive' || settings.storageProvider === 'r2';
     const safeMaxMb = isCloudStorage ? (settings.maxFileSizeMb || 100) : Math.min(settings.maxFileSizeMb || 25, 25);
     const maxBytes = safeMaxMb * 1024 * 1024;
 
-    if (files.length + newFilesList.length > maxFiles) {
+    if (files.length + incomingList.length > maxFiles) {
       setErrorMessage(`Maksimal ${maxFiles} file per pesanan.`);
       return;
     }
 
     const processedFiles: SelectedFileItem[] = [];
 
-    for (const f of newFilesList) {
+    for (const f of incomingList) {
       if (f.size > maxBytes) {
-        const fileMb = (f.size / (1024 * 1024)).toFixed(1);
-        setErrorMessage(`File "${f.name}" (${fileMb} MB) melebihi batas maksimal ${safeMaxMb} MB. Silakan kompres dokumen terlebih dahulu.`);
+        setErrorMessage(`File "${f.name}" melebihi batas ukuran ${safeMaxMb} MB.`);
         return;
       }
 
@@ -132,12 +136,46 @@ export default function CustomerUploadPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    processIncomingFiles(Array.from(e.target.files));
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!settings.isOpen || isUploading) return;
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (!settings.isOpen || isUploading) return;
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processIncomingFiles(Array.from(e.dataTransfer.files));
+    }
+  };
+
   const removeFile = (id: string) => {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
-  // 3. Kirim Langsung Dokumen ke Admin via Presigned Upload R2
+  // 3. Kirim Dokumen ke Kasir (Mendukung Google Drive Chunked Upload & R2)
   const handleSubmit = async () => {
+    if (!settings.isOpen) {
+      setErrorMessage('Mohon maaf, toko sedang tutup sementara waktu.');
+      return;
+    }
+
     if (!customerName.trim()) {
       setErrorMessage('Silakan isi Nama Pemesan agar kasir dapat memanggil Anda.');
       return;
@@ -165,7 +203,7 @@ export default function CustomerUploadPage() {
       for (let i = 0; i < files.length; i++) {
         const item = files[i];
 
-        // Minta Presigned URL
+        // Minta Presigned URL / Provider config
         const presignRes = await fetch('/api/upload/presign', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -253,8 +291,7 @@ export default function CustomerUploadPage() {
           });
 
           if (!putRes.ok) {
-            const errData = await putRes.json().catch(() => ({}));
-            throw new Error(errData.error || `Gagal mengunggah file ${item.originalFilename}`);
+            throw new Error(`Gagal mengunggah file ${item.originalFilename}`);
           }
 
           uploadedFiles.push({
@@ -304,270 +341,511 @@ export default function CustomerUploadPage() {
     }
   };
 
+  const totalSizeMb = (
+    files.reduce((acc, item) => acc + item.fileSizeBytes, 0) /
+    (1024 * 1024)
+  ).toFixed(2);
+
+  const maxFiles = settings.maxFilesPerOrder || 10;
+  const isCloudStorage = settings.storageProvider === 'gdrive' || settings.storageProvider === 'r2';
+  const displayMaxMb = isCloudStorage ? (settings.maxFileSizeMb || 100) : Math.min(settings.maxFileSizeMb || 25, 25);
+
   return (
-    <>
-      {/* Navbar Minimalis */}
-      <header className="navbar">
-        <div className="navbar-brand">
-          <div className="brand-icon">
-            <Printer size={20} />
-          </div>
-          <div>
-            <div style={{ lineHeight: 1.2, fontWeight: 700 }}>{settings.storeName}</div>
-            <div style={{ fontSize: '0.75rem', color: settings.isOpen ? '#059669' : '#dc2626', fontWeight: 600 }}>
-              {settings.isOpen ? '● Menerima Cetak' : '● Sedang Tutup'}
+    <div className="customer-viewport">
+      {/* Input File Tersembunyi (Selalu Terpasang) */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+        style={{ display: 'none' }}
+        disabled={!settings.isOpen || isUploading}
+        onChange={handleFileSelect}
+      />
+
+      {/* Top Bar Clean & Profesional */}
+      <header className="customer-topbar">
+        <div className="customer-topbar-inner">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+            <div className="brand-icon">
+              <Printer size={17} />
             </div>
+            <span
+              style={{
+                fontWeight: 700,
+                fontSize: '0.95rem',
+                letterSpacing: '-0.02em',
+                color: 'var(--text-primary)',
+              }}
+            >
+              {settings.storeName}
+            </span>
           </div>
+
+          <span
+            style={{
+              fontSize: '0.775rem',
+              fontWeight: 600,
+              color: settings.isOpen ? '#059669' : '#dc2626',
+              letterSpacing: '-0.01em',
+            }}
+          >
+            {settings.isOpen ? 'Buka · Menerima Cetak' : 'Tutup Sementara'}
+          </span>
         </div>
       </header>
 
-      <main className="container" style={{ maxWidth: '600px' }}>
-        {/* Banner Pesanan Aktif (Jika Ada) */}
+      {/* Main Container Tanpa Scroll Halaman */}
+      <main className="customer-main">
+        {/* Banner Pesanan Aktif (Kompak 1 Baris) */}
         {activeOrder && (
-          <div className="active-order-banner">
-            <div>
-              <div style={{ fontSize: '0.8rem', color: '#1e40af', fontWeight: 600 }}>
-                Pesanan Anda Sedang Berjalan:
-              </div>
-              <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#1d4ed8' }}>
-                Antrean {activeOrder.queueNumber}
-              </div>
+          <div
+            style={{
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              borderRadius: '12px',
+              padding: '0.5rem 0.75rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexShrink: 0,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.825rem' }}>
+              <span style={{ color: '#1e40af', fontWeight: 500 }}>Antrean Aktif:</span>
+              <strong
+                style={{
+                  color: '#1d4ed8',
+                  fontWeight: 800,
+                  fontFamily: 'var(--font-mono)',
+                }}
+              >
+                {activeOrder.queueNumber}
+              </strong>
             </div>
             <button
-              className="btn btn-primary btn-sm"
+              type="button"
               onClick={() => router.push(`/status/${activeOrder.trackingCode}`)}
+              style={{
+                background: 'var(--primary)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.35rem 0.65rem',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.2rem',
+                cursor: 'pointer',
+              }}
             >
-              Lihat Status <ChevronRight size={14} />
+              Lihat Status <ChevronRight size={13} />
             </button>
           </div>
         )}
 
-        {/* Hero Title */}
-        <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
-            Kirim Dokumen Cetak
-          </h1>
-          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-            Pilih file dokumen atau foto Anda, lalu kirim langsung ke antrean kasir.
-          </p>
-        </div>
-
-        {/* Error Alert */}
-        {errorMessage && (
+        {/* Banner Peringatan Saat Toko Tutup */}
+        {!settings.isOpen && (
           <div
             style={{
-              background: '#fef2f2',
-              border: '1px solid #fecaca',
-              borderRadius: 'var(--radius-md)',
-              padding: '0.875rem',
-              color: '#dc2626',
-              marginBottom: '1rem',
-              fontSize: '0.875rem',
+              background: '#fffbeb',
+              border: '1px solid #fde68a',
+              borderRadius: '12px',
+              padding: '0.6rem 0.85rem',
               display: 'flex',
-              gap: '0.5rem',
               alignItems: 'center',
+              gap: '0.6rem',
+              color: '#92400e',
+              fontSize: '0.8rem',
+              flexShrink: 0,
             }}
           >
-            <AlertCircle size={18} />
-            <span>{errorMessage}</span>
+            <Clock size={17} color="#d97706" style={{ flexShrink: 0 }} />
+            <div style={{ lineHeight: 1.35 }}>
+              <strong style={{ color: '#78350f' }}>Toko Sedang Tutup:</strong> Pengiriman dokumen dinonaktifkan sementara hingga kasir membuka antrean.
+            </div>
           </div>
         )}
 
-        {/* Input Nama Pemesan */}
-        <div
-          className="card"
-          style={{
-            marginBottom: '1.25rem',
-            padding: '1.25rem',
-            background: 'white',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-lg)',
-            boxShadow: 'var(--shadow-sm)',
-          }}
-        >
-          <label
-            htmlFor="customerNameInput"
+        {/* Panel Utama Terpadu */}
+        <section className="customer-panel">
+          {/* Header Panel */}
+          <div style={{ marginBottom: '0.85rem', flexShrink: 0 }}>
+            <h1
+              style={{
+                fontSize: '1.25rem',
+                fontWeight: 700,
+                letterSpacing: '-0.025em',
+                color: 'var(--text-primary)',
+                marginBottom: '0.15rem',
+              }}
+            >
+              Kirim Dokumen Cetak
+            </h1>
+            <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+              Isi nama panggilan dan unggah dokumen untuk mendapatkan nomor antrean kasir.
+            </p>
+          </div>
+
+          {/* Error Alert Kompak */}
+          {errorMessage && (
+            <div
+              style={{
+                background: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: '10px',
+                padding: '0.55rem 0.75rem',
+                color: '#dc2626',
+                marginBottom: '0.75rem',
+                fontSize: '0.8rem',
+                display: 'flex',
+                gap: '0.45rem',
+                alignItems: 'center',
+                fontWeight: 500,
+                flexShrink: 0,
+              }}
+            >
+              <AlertCircle size={16} style={{ flexShrink: 0 }} />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
+          {/* Input Nama Pemesan */}
+          <div
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              fontSize: '0.9rem',
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-              marginBottom: '0.45rem',
+              marginBottom: '0.85rem',
+              flexShrink: 0,
+              opacity: settings.isOpen ? 1 : 0.6,
             }}
           >
-            <User size={17} color="var(--primary)" />
-            <span>Nama Pemesan / Panggilan</span>
-            <span style={{ color: '#dc2626' }}>*</span>
-          </label>
-          <input
-            id="customerNameInput"
-            type="text"
-            className="text-input"
-            placeholder="Contoh: Budi, Mbak Rina, Mas Dimas..."
-            value={customerName}
-            maxLength={40}
-            onChange={(e) => {
-              setCustomerName(e.target.value);
-              if (errorMessage) setErrorMessage('');
-            }}
+            <label
+              htmlFor="customerNameInput"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                color: 'var(--text-secondary)',
+                marginBottom: '0.35rem',
+              }}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <User size={14} color="var(--primary)" />
+                Nama Pemesan / Panggilan <span style={{ color: '#dc2626' }}>*</span>
+              </span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 400, color: 'var(--text-muted)' }}>
+                Untuk panggilan di kasir
+              </span>
+            </label>
+            <input
+              id="customerNameInput"
+              type="text"
+              className="text-input"
+              placeholder="Contoh: Budi, Rina, Dimas..."
+              value={customerName}
+              maxLength={40}
+              disabled={!settings.isOpen || isUploading}
+              onChange={(e) => {
+                setCustomerName(e.target.value);
+                if (errorMessage) setErrorMessage('');
+              }}
+              style={{
+                fontSize: '0.925rem',
+                fontWeight: 500,
+                height: '42px',
+                padding: '0 0.75rem',
+                borderRadius: '10px',
+              }}
+            />
+          </div>
+
+          {/* Area Dokumen Adaptif (Dropzone Kosong ATAU Daftar File Scroll Internal) */}
+          <div
             style={{
-              fontSize: '0.95rem',
-              fontWeight: 500,
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              marginBottom: '0.85rem',
             }}
-          />
-          <div style={{ fontSize: '0.775rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
-            Nama panggilan ini akan dipanggil kasir saat hasil cetakan Anda siap diambil.
-          </div>
-        </div>
-
-        {/* Area Pilih Dokumen */}
-        <div
-          className="dropzone"
-          onClick={() => fileInputRef.current?.click()}
-          style={{ marginBottom: '1.5rem', padding: '2.5rem 1.5rem' }}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-            style={{ display: 'none' }}
-            onChange={handleFileSelect}
-          />
-          <div className="dropzone-icon">
-            <UploadCloud size={32} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: '1.15rem', color: 'var(--text-primary)' }}>
-              Pilih Dokumen dari HP
-            </div>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-              Mendukung PDF, Word (DOCX), dan Foto (Maks. {settings.storageProvider === 'gdrive' || settings.storageProvider === 'r2' ? (settings.maxFileSizeMb || 100) : Math.min(settings.maxFileSizeMb || 25, 25)} MB{settings.storageProvider === 'gdrive' ? ' • Google Drive Toko' : ''})
-            </div>
-          </div>
-          <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: '0.5rem' }}>
-            Jelajahi File
-          </button>
-        </div>
-
-        {/* Daftar File Terpilih */}
-        {files.length > 0 && (
-          <section className="card" style={{ padding: '1.25rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h2 style={{ fontSize: '1rem', fontWeight: 700 }}>
-                Dokumen Dipilih ({files.length})
-              </h2>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setFiles([])}
-                style={{ fontSize: '0.75rem' }}
+          >
+            {files.length === 0 ? (
+              <div
+                className={`dropzone ${isDragging ? 'active' : ''} ${!settings.isOpen ? 'disabled' : ''}`}
+                onClick={() => {
+                  if (settings.isOpen && !isUploading) {
+                    fileInputRef.current?.click();
+                  }
+                }}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                style={{
+                  flex: 1,
+                  minHeight: '140px',
+                  padding: '1.25rem 1rem',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  borderRadius: '12px',
+                }}
               >
-                Hapus Semua
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem', marginBottom: '1.25rem' }}>
-              {files.map((item, idx) => (
                 <div
-                  key={item.id}
+                  className="dropzone-icon"
+                  style={{ width: '44px', height: '44px', marginBottom: '0.1rem' }}
+                >
+                  <UploadCloud size={22} />
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      fontSize: '0.95rem',
+                      color: 'var(--text-primary)',
+                      letterSpacing: '-0.015em',
+                    }}
+                  >
+                    {isDragging ? 'Lepaskan File di Sini' : 'Ketuk untuk Pilih Dokumen atau Foto'}
+                  </div>
+                  <div style={{ fontSize: '0.775rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                    PDF, Word (DOC/DOCX), JPG, PNG · Maks. {displayMaxMb} MB/file
+                  </div>
+                </div>
+                <span
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0.75rem',
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: 'var(--radius-sm)',
+                    marginTop: '0.25rem',
+                    fontSize: '0.775rem',
+                    fontWeight: 600,
+                    color: 'var(--primary)',
+                    background: '#eff6ff',
+                    padding: '0.35rem 0.85rem',
+                    borderRadius: '8px',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', overflow: 'hidden' }}>
-                    {item.fileType.includes('image') ? (
-                      <ImageIcon size={22} color="var(--primary)" />
-                    ) : (
-                      <FileText size={22} color="var(--primary)" />
-                    )}
-                    <div style={{ overflow: 'hidden' }}>
-                      <div
-                        style={{
-                          fontWeight: 600,
-                          fontSize: '0.9rem',
-                          textOverflow: 'ellipsis',
-                          overflow: 'hidden',
-                          whiteSpace: 'nowrap',
-                          maxWidth: '280px',
-                        }}
-                      >
-                        {item.originalFilename}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {(item.fileSizeBytes / (1024 * 1024)).toFixed(2)} MB • File #{idx + 1}
-                      </div>
-                    </div>
+                  Jelajahi Perangkat
+                </span>
+              </div>
+            ) : (
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  border: isDragging ? '1.5px dashed var(--primary)' : '1px solid #e2e8f0',
+                  borderRadius: '12px',
+                  background: '#f8fafc',
+                  padding: '0.65rem 0.75rem',
+                  overflow: 'hidden',
+                }}
+              >
+                {/* Header Daftar File */}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    paddingBottom: '0.5rem',
+                    marginBottom: '0.5rem',
+                    borderBottom: '1px solid #e2e8f0',
+                    flexShrink: 0,
+                  }}
+                >
+                  <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    Dokumen ({files.length}/{maxFiles})
+                    <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: '0.35rem' }}>
+                      · {totalSizeMb} MB
+                    </span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => removeFile(item.id)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', padding: '0.25rem' }}
-                    title="Hapus file ini"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    {files.length < maxFiles && (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={!settings.isOpen || isUploading}
+                        style={{
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          color: 'var(--primary)',
+                          background: '#ffffff',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          padding: '0.25rem 0.55rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.2rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Plus size={13} /> Tambah
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setFiles([])}
+                      disabled={isUploading}
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 500,
+                        color: '#dc2626',
+                        background: '#ffffff',
+                        border: '1px solid #fecaca',
+                        borderRadius: '6px',
+                        padding: '0.25rem 0.55rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Reset
+                    </button>
+                  </div>
                 </div>
-              ))}
-            </div>
 
-            {/* Tombol Kirim Langsung */}
+                {/* Scrollable List Internal */}
+                <div className="customer-scroll-list">
+                  {files.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '0.45rem 0.6rem',
+                        background: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        gap: '0.5rem',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          overflow: 'hidden',
+                          flex: 1,
+                        }}
+                      >
+                        {item.fileType.includes('image') ? (
+                          <ImageIcon size={17} color="var(--primary)" style={{ flexShrink: 0 }} />
+                        ) : (
+                          <FileText size={17} color="var(--primary)" style={{ flexShrink: 0 }} />
+                        )}
+                        <div style={{ overflow: 'hidden', flex: 1 }}>
+                          <div
+                            style={{
+                              fontWeight: 600,
+                              fontSize: '0.825rem',
+                              color: 'var(--text-primary)',
+                              textOverflow: 'ellipsis',
+                              overflow: 'hidden',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {item.originalFilename}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                            {(item.fileSizeBytes / (1024 * 1024)).toFixed(2)} MB · File #{idx + 1}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeFile(item.id)}
+                        disabled={isUploading}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: '#94a3b8',
+                          width: '32px',
+                          height: '32px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: '6px',
+                          flexShrink: 0,
+                        }}
+                        title="Hapus file ini"
+                        aria-label={`Hapus ${item.originalFilename}`}
+                      >
+                        <Trash2 size={15} color="#dc2626" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Tombol Aksi Utama (Selalu Terlihat Tanpa Scroll) */}
+          <div style={{ flexShrink: 0 }}>
             <button
               type="button"
-              className="btn btn-primary btn-lg"
+              className="btn btn-primary"
               onClick={handleSubmit}
-              disabled={isUploading}
-              style={{ width: '100%', fontSize: '1.05rem', gap: '0.625rem' }}
+              disabled={isUploading || !settings.isOpen || files.length === 0}
+              style={{
+                width: '100%',
+                height: '46px',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                letterSpacing: '-0.01em',
+                borderRadius: '10px',
+                gap: '0.5rem',
+                opacity: !settings.isOpen || isUploading || files.length === 0 ? 0.55 : 1,
+                cursor:
+                  !settings.isOpen || isUploading || files.length === 0
+                    ? 'not-allowed'
+                    : 'pointer',
+              }}
             >
               {isUploading ? (
                 <span>Mengirim Dokumen ({uploadProgress}%)...</span>
               ) : (
                 <>
-                  <Send size={18} />
-                  <span>Kirim ke Kasir Sekarang ({files.length} File)</span>
+                  <Send size={16} />
+                  <span>
+                    {files.length > 0
+                      ? `Kirim ke Kasir Sekarang (${files.length} Dokumen)`
+                      : 'Pilih Dokumen untuk Mengirim'}
+                  </span>
                 </>
               )}
             </button>
 
             {isUploading && (
-              <div className="progress-bar-container" style={{ marginTop: '0.75rem' }}>
+              <div className="progress-bar-container">
                 <div className="progress-bar-fill" style={{ width: `${uploadProgress}%` }} />
               </div>
             )}
-          </section>
-        )}
+          </div>
+        </section>
 
-        {/* Jaminan Privasi */}
-        <div
+        {/* Footer Jaminan Privasi (Ringkas 1 Baris) */}
+        <footer
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '0.625rem',
-            padding: '0.75rem 1rem',
-            background: '#f8fafc',
-            border: '1px solid #e2e8f0',
-            borderRadius: 'var(--radius-md)',
-            fontSize: '0.8rem',
+            justifyContent: 'center',
+            gap: '0.4rem',
+            fontSize: '0.74rem',
             color: 'var(--text-muted)',
-            marginTop: '1.5rem',
+            textAlign: 'center',
+            flexShrink: 0,
+            padding: '0.15rem 0',
           }}
         >
-          <ShieldCheck size={22} color="#059669" style={{ flexShrink: 0 }} />
-          <div>
-            <strong>Privasi Aman:</strong> Dokumen Anda langsung masuk ke kasir dan{' '}
-            <strong>otomatis terhapus permanen dalam 24 jam</strong>.
-          </div>
-        </div>
+          <ShieldCheck size={15} color="#059669" style={{ flexShrink: 0 }} />
+          <span>Privasi terjaga · Dokumen otomatis terhapus permanen dalam 24 jam.</span>
+        </footer>
       </main>
-    </>
+    </div>
   );
 }
