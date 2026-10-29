@@ -50,6 +50,7 @@ export default function AdminDashboardPage() {
   // Drag & Drop State
   const [draggedOrderId, setDraggedOrderId] = useState<string | null>(null);
   const [draggedOrder, setDraggedOrder] = useState<Order | null>(null);
+  const draggedOrderRef = useRef<Order | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<OrderStatus | null>(null);
 
   // Toast Warning State
@@ -276,7 +277,7 @@ export default function AdminDashboardPage() {
   };
 
   // ==========================================
-  // DRAG & DROP HANDLERS (Interaktif & Fluid)
+  // DRAG & DROP HANDLERS (Interaktif, Stabil & Bebas Flicker)
   // ==========================================
   const handleDragStart = (e: React.DragEvent, order: Order) => {
     if (order.status === 'COMPLETED' || order.status === 'CANCELLED') {
@@ -284,6 +285,7 @@ export default function AdminDashboardPage() {
       showToastWarning(`Pesanan ${order.queueNumber} sudah selesai dan tidak dapat dipindahkan.`);
       return;
     }
+    draggedOrderRef.current = order;
     e.dataTransfer.setData('text/plain', order.id);
     e.dataTransfer.effectAllowed = 'move';
     setDraggedOrderId(order.id);
@@ -293,21 +295,21 @@ export default function AdminDashboardPage() {
 
   const handleDragOver = (e: React.DragEvent, targetStatus: OrderStatus) => {
     e.preventDefault();
-    const nextValid = draggedOrder ? NEXT_VALID_STATUS[draggedOrder.status] : null;
+    e.dataTransfer.dropEffect = 'move';
+    const activeOrder = draggedOrderRef.current || draggedOrder;
+    const nextValid = activeOrder ? NEXT_VALID_STATUS[activeOrder.status] : null;
     if (targetStatus === nextValid) {
-      e.dataTransfer.dropEffect = 'move';
       if (dragOverColumn !== targetStatus) {
         setDragOverColumn(targetStatus);
-      }
-    } else {
-      e.dataTransfer.dropEffect = 'none';
-      if (dragOverColumn === targetStatus) {
-        setDragOverColumn(null);
       }
     }
   };
 
   const handleDragLeave = (e: React.DragEvent, targetStatus: OrderStatus) => {
+    // Cegah reset jika pointer masih berada di dalam elemen anak kolom
+    if (e.currentTarget.contains(e.relatedTarget as Node)) {
+      return;
+    }
     if (dragOverColumn === targetStatus) {
       setDragOverColumn(null);
     }
@@ -315,14 +317,19 @@ export default function AdminDashboardPage() {
 
   const handleDrop = async (e: React.DragEvent, targetStatus: OrderStatus) => {
     e.preventDefault();
+    e.stopPropagation();
     setDragOverColumn(null);
-    const orderId = e.dataTransfer.getData('text/plain') || draggedOrderId;
-    if (!orderId) return;
 
-    const targetOrder = orders.find((o) => o.id === orderId);
+    const activeOrder = draggedOrderRef.current || draggedOrder;
+    const orderId = e.dataTransfer.getData('text/plain') || activeOrder?.id || draggedOrderId;
+    if (!orderId) {
+      handleDragEnd();
+      return;
+    }
+
+    const targetOrder = orders.find((o) => o.id === orderId) || activeOrder;
     if (!targetOrder) {
-      setDraggedOrderId(null);
-      setDraggedOrder(null);
+      handleDragEnd();
       return;
     }
 
@@ -330,8 +337,7 @@ export default function AdminDashboardPage() {
 
     // Dilarang keras memundurkan status atau melompat tahap!
     if (targetStatus !== nextValid) {
-      setDraggedOrderId(null);
-      setDraggedOrder(null);
+      handleDragEnd();
       playErrorTone();
       const nextLabel = nextValid ? STATUS_LABELS[nextValid] : 'Selesai';
       showToastWarning(
@@ -348,12 +354,12 @@ export default function AdminDashboardPage() {
       downloadAllFiles(targetOrder.files);
     }
 
-    await updateOrderStatus(orderId, targetStatus);
-    setDraggedOrderId(null);
-    setDraggedOrder(null);
+    await updateOrderStatus(targetOrder.id, targetStatus);
+    handleDragEnd();
   };
 
   const handleDragEnd = () => {
+    draggedOrderRef.current = null;
     setDraggedOrderId(null);
     setDraggedOrder(null);
     setDragOverColumn(null);
@@ -890,7 +896,7 @@ export default function AdminDashboardPage() {
             TAMPILAN 1: PAPAN KANBAN (DRAG & DROP MOTION)
             ======================================================== */}
         {viewMode === 'KANBAN' ? (
-          <section className="kanban-container">
+          <section className={`kanban-container ${draggedOrderId ? 'is-dragging-any' : ''}`}>
             {/* Kolom 1: Menunggu Cetak */}
             <div
               className={`kanban-col ${dragOverColumn === 'PENDING' ? 'drag-over' : ''}`}

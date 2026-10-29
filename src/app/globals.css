@@ -675,6 +675,8 @@ a {
 }
 
 .drop-placeholder {
+  pointer-events: none;
+  user-select: none;
   height: 80px;
   border: 2px dashed #84cc16;
   background: rgba(163, 230, 53, 0.12);
@@ -687,6 +689,11 @@ a {
   font-weight: 700;
   color: #65a30d;
   animation: pulse-drop 1.2s infinite ease-in-out;
+}
+
+/* Ketika dragging aktif, nonaktifkan pointer-events pada kartu lain agar drop target selalu kolom kanban */
+.kanban-container.is-dragging-any .kanban-card:not(.is-dragging) {
+  pointer-events: none;
 }
 
 @keyframes pulse-drop {
