@@ -94,7 +94,8 @@ export default function CustomerUploadPage() {
 
     const newFilesList = Array.from(e.target.files);
     const maxFiles = settings.maxFilesPerOrder || 10;
-    const safeMaxMb = Math.min(settings.maxFileSizeMb || 25, 25);
+    const isCloudStorage = settings.storageProvider === 'gdrive' || settings.storageProvider === 'r2';
+    const safeMaxMb = isCloudStorage ? (settings.maxFileSizeMb || 100) : Math.min(settings.maxFileSizeMb || 25, 25);
     const maxBytes = safeMaxMb * 1024 * 1024;
 
     if (files.length + newFilesList.length > maxFiles) {
@@ -178,27 +179,93 @@ export default function CustomerUploadPage() {
           throw new Error(`Gagal mempersiapkan unggahan untuk ${item.originalFilename}`);
         }
 
-        const { uploadUrl, storageKey } = await presignRes.json();
+        const presignData = await presignRes.json();
 
-        // Upload langsung payload ke R2
-        const putRes = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': item.fileType },
-          body: item.file,
-        });
+        if (presignData.provider === 'gdrive') {
+          // Upload ke Google Drive via Resumable Chunked Upload (3 MB per chunk)
+          const initRes = await fetch('/api/upload/gdrive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: item.originalFilename,
+              fileType: item.fileType,
+              fileSize: item.fileSizeBytes,
+            }),
+          });
 
-        if (!putRes.ok) {
-          throw new Error(`Gagal mengunggah file ${item.originalFilename}`);
+          if (!initRes.ok) {
+            const err = await initRes.json();
+            throw new Error(err.error || `Gagal menyiapkan upload Google Drive untuk ${item.originalFilename}`);
+          }
+
+          const { sessionUri } = await initRes.json();
+          const CHUNK_SIZE = 3 * 1024 * 1024; // 3 MB (kelipatan 256 KiB untuk Google Drive API)
+          const totalBytes = item.fileSizeBytes;
+          let offset = 0;
+          let finalStorageKey = '';
+
+          while (offset < totalBytes) {
+            const nextOffset = Math.min(offset + CHUNK_SIZE, totalBytes);
+            const chunkBlob = item.file.slice(offset, nextOffset);
+            const contentRange = `bytes ${offset}-${nextOffset - 1}/${totalBytes}`;
+
+            const chunkRes = await fetch('/api/upload/gdrive', {
+              method: 'PUT',
+              headers: {
+                'x-session-uri': sessionUri,
+                'content-range': contentRange,
+              },
+              body: chunkBlob,
+            });
+
+            if (!chunkRes.ok) {
+              const err = await chunkRes.json();
+              throw new Error(err.error || `Gagal mengirim data ${item.originalFilename} ke Google Drive`);
+            }
+
+            const chunkData = await chunkRes.json();
+            offset = nextOffset;
+
+            // Progres upload yang halus
+            const filePercent = offset / totalBytes;
+            const overallProgress = Math.round(((i + filePercent) / totalSteps) * 85);
+            setUploadProgress(overallProgress);
+
+            if (chunkData.status === 'complete' && chunkData.storageKey) {
+              finalStorageKey = chunkData.storageKey;
+              break;
+            }
+          }
+
+          uploadedFiles.push({
+            originalFilename: item.originalFilename,
+            storageKey: finalStorageKey,
+            fileType: item.fileType,
+            fileSizeBytes: item.fileSizeBytes,
+          });
+        } else {
+          // Fallback ke Cloudflare R2 / Database
+          const { uploadUrl, storageKey } = presignData;
+          const putRes = await fetch(uploadUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': item.fileType },
+            body: item.file,
+          });
+
+          if (!putRes.ok) {
+            const errData = await putRes.json().catch(() => ({}));
+            throw new Error(errData.error || `Gagal mengunggah file ${item.originalFilename}`);
+          }
+
+          uploadedFiles.push({
+            originalFilename: item.originalFilename,
+            storageKey,
+            fileType: item.fileType,
+            fileSizeBytes: item.fileSizeBytes,
+          });
+
+          setUploadProgress(Math.round(((i + 1) / totalSteps) * 85));
         }
-
-        uploadedFiles.push({
-          originalFilename: item.originalFilename,
-          storageKey,
-          fileType: item.fileType,
-          fileSizeBytes: item.fileSizeBytes,
-        });
-
-        setUploadProgress(Math.round(((i + 1) / totalSteps) * 85));
       }
 
       // Buat Pesanan di Backend
@@ -377,7 +444,7 @@ export default function CustomerUploadPage() {
               Pilih Dokumen dari HP
             </div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-              Mendukung PDF, Word (DOCX), dan Foto (Maks. {Math.min(settings.maxFileSizeMb || 25, 25)} MB)
+              Mendukung PDF, Word (DOCX), dan Foto (Maks. {settings.storageProvider === 'gdrive' || settings.storageProvider === 'r2' ? (settings.maxFileSizeMb || 100) : Math.min(settings.maxFileSizeMb || 25, 25)} MB{settings.storageProvider === 'gdrive' ? ' • Google Drive Toko' : ''})
             </div>
           </div>
           <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: '0.5rem' }}>

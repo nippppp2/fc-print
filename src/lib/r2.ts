@@ -56,6 +56,8 @@ export async function getPresignedUploadUrl(
   };
 }
 
+import { getGDriveDownloadUrl, deleteGDriveFile } from './gdrive';
+
 /**
  * Menghasilkan Presigned GET URL untuk admin mengunduh dokumen asli
  */
@@ -64,6 +66,12 @@ export async function getPresignedDownloadUrl(
   originalFilename?: string,
   expiresIn = 1800
 ) {
+  // Dukungan untuk Google Drive
+  if (storageKey.startsWith('gdrive:')) {
+    const fileId = storageKey.replace('gdrive:', '');
+    return await getGDriveDownloadUrl(fileId, originalFilename);
+  }
+
   if (!s3Client || !isR2Configured) {
     const fnParam = originalFilename ? `&filename=${encodeURIComponent(originalFilename)}` : '';
     return `/api/upload/file?key=${encodeURIComponent(storageKey)}${fnParam}`;
@@ -81,20 +89,32 @@ export async function getPresignedDownloadUrl(
 }
 
 /**
- * Menghapus kumpulan objek file (Cloudflare R2 atau Local Storage)
+ * Menghapus kumpulan objek file (Google Drive, Cloudflare R2, atau Local Database)
  */
 export async function deleteR2Files(storageKeys: string[]) {
   if (storageKeys.length === 0) return;
+
+  const gdriveKeys = storageKeys.filter((k) => k.startsWith('gdrive:'));
+  const otherKeys = storageKeys.filter((k) => !k.startsWith('gdrive:'));
+
+  // Hapus dari Google Drive
+  for (const gKey of gdriveKeys) {
+    const fileId = gKey.replace('gdrive:', '');
+    await deleteGDriveFile(fileId);
+  }
+
+  if (otherKeys.length === 0) return;
 
   if (s3Client && isR2Configured) {
     const command = new DeleteObjectsCommand({
       Bucket: bucketName,
       Delete: {
-        Objects: storageKeys.map((key) => ({ Key: key })),
+        Objects: otherKeys.map((key) => ({ Key: key })),
       },
     });
     await s3Client.send(command);
   } else {
-    await db.deleteFileBlobs(storageKeys);
+    await db.deleteFileBlobs(otherKeys);
   }
 }
+

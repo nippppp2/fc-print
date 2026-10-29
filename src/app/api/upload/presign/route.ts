@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getPresignedUploadUrl } from '@/lib/r2';
+import { getPresignedUploadUrl, isR2Configured } from '@/lib/r2';
+import { isGDriveConfigured } from '@/lib/gdrive';
 import { nanoid } from 'nanoid';
 
 export async function POST(request: Request) {
@@ -14,6 +15,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // Jika Google Drive aktif, langsung gunakan provider gdrive
+    if (isGDriveConfigured) {
+      return NextResponse.json({
+        success: true,
+        provider: 'gdrive',
+      });
+    }
+
     // Buat safe storage key terisolasi: orders/{date}/{nanoid}-{filename}
     const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
     const datePrefix = new Date().toISOString().slice(0, 10);
@@ -23,6 +32,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
+      provider: isR2Configured ? 'r2' : 'database',
       uploadUrl: presignedData.uploadUrl,
       storageKey: presignedData.storageKey,
       isMock: presignedData.isMock,
@@ -32,3 +42,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+

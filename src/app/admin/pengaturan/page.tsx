@@ -210,20 +210,43 @@ export default function AdminSettingsPage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
               <div className="option-group">
-                <label className="option-label">Batas Ukuran per Dokumen (Maks. 25 MB)</label>
+                <label className="option-label">
+                  Batas Ukuran per Dokumen (MB)
+                  {settings.storageProvider === 'gdrive' && (
+                    <span style={{ marginLeft: '0.5rem', color: '#16a34a', fontSize: '0.8rem', fontWeight: 600 }}>
+                      ● Google Drive Aktif
+                    </span>
+                  )}
+                  {settings.storageProvider === 'r2' && (
+                    <span style={{ marginLeft: '0.5rem', color: '#16a34a', fontSize: '0.8rem', fontWeight: 600 }}>
+                      ● Cloudflare R2 Aktif
+                    </span>
+                  )}
+                </label>
                 <input
                   type="number"
                   min={1}
-                  max={25}
+                  max={settings.storageProvider === 'gdrive' || settings.storageProvider === 'r2' ? 500 : 25}
                   className="text-input"
-                  value={Math.min(settings.maxFileSizeMb || 25, 25)}
+                  value={
+                    settings.storageProvider === 'gdrive' || settings.storageProvider === 'r2'
+                      ? settings.maxFileSizeMb || 100
+                      : Math.min(settings.maxFileSizeMb || 25, 25)
+                  }
                   onChange={(e) => {
                     const val = parseInt(e.target.value) || 25;
-                    handleChange('maxFileSizeMb', Math.min(Math.max(val, 1), 25));
+                    const maxAllowed = settings.storageProvider === 'gdrive' || settings.storageProvider === 'r2' ? 500 : 25;
+                    handleChange('maxFileSizeMb', Math.min(Math.max(val, 1), maxAllowed));
                   }}
                 />
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-                  Batas aman: Maks. <strong>25 MB</strong> per file agar proses unggah stabil dan tidak terputus.
+                  {settings.storageProvider === 'gdrive' ? (
+                    <span>Tersimpan langsung ke <strong>Google Drive Toko</strong>. Mendukung file besar (hingga 500 MB).</span>
+                  ) : settings.storageProvider === 'r2' ? (
+                    <span>Tersimpan ke <strong>Cloudflare R2</strong>. Mendukung file besar hingga 500 MB.</span>
+                  ) : (
+                    <span>Mode Database bawaan: Maks. <strong>25 MB</strong> per file. Pasang Google Drive untuk berkas besar tanpa batas.</span>
+                  )}
                 </div>
               </div>
 

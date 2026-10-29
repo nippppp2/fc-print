@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getGDriveFileStream } from '@/lib/gdrive';
 
 export async function PUT(request: Request) {
   try {
@@ -50,6 +51,26 @@ export async function GET(request: Request) {
 
     if (!key) {
       return new NextResponse('Storage key tidak ditemukan', { status: 400 });
+    }
+
+    // Jika file tersimpan di Google Drive, stream langsung dari Google Drive
+    if (key.startsWith('gdrive:')) {
+      const fileId = key.replace('gdrive:', '');
+      const { stream, contentType: gContentType, name: gName } = await getGDriveFileStream(fileId);
+      const webStream = new ReadableStream({
+        start(controller) {
+          stream.on('data', (chunk) => controller.enqueue(chunk));
+          stream.on('end', () => controller.close());
+          stream.on('error', (err) => controller.error(err));
+        },
+      });
+
+      return new NextResponse(webStream, {
+        headers: {
+          'Content-Type': gContentType || 'application/octet-stream',
+          'Content-Disposition': `attachment; filename="${encodeURIComponent(filename || gName)}"`,
+        },
+      });
     }
 
     const fileBlob = await db.getFileBlob(key);

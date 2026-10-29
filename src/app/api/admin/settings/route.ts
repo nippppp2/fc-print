@@ -1,20 +1,30 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyAdminAuth } from '@/lib/auth';
+import { isGDriveConfigured } from '@/lib/gdrive';
+import { isR2Configured } from '@/lib/r2';
 
 export async function GET() {
   const settings = await db.getSettings();
   const { authenticated, role } = await verifyAdminAuth();
+  const storageProvider = isGDriveConfigured ? 'gdrive' : isR2Configured ? 'r2' : 'database';
 
   // Jika bukan Super Admin (misal pelanggan atau kasir), sembunyikan semua PIN keamanan
   if (!authenticated || role !== 'SUPER_ADMIN') {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { kasirPin, superAdminPin, adminPin, ...safeSettings } = settings;
-    return NextResponse.json({ success: true, settings: safeSettings });
+    return NextResponse.json({
+      success: true,
+      settings: { ...safeSettings, storageProvider },
+    });
   }
 
-  return NextResponse.json({ success: true, settings });
+  return NextResponse.json({
+    success: true,
+    settings: { ...settings, storageProvider },
+  });
 }
+
 
 export async function POST(request: Request) {
   try {

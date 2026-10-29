@@ -34,4 +34,6 @@ export interface StoreSettings {
   kasirPin?: string;       // Default: '1234'
   superAdminPin?: string;  // Default: '9999'
   adminPin?: string;       // Backward compatibility fallback
+  storageProvider?: 'gdrive' | 'r2' | 'database';
 }
+

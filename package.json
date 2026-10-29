@@ -14,6 +14,7 @@
     "@neon/config": "^1.9.4",
     "@neon/env": "^1.6.5",
     "@neondatabase/serverless": "^1.2.0",
+    "googleapis": "^188.0.0",
     "lucide-react": "^1.61.0",
     "nanoid": "^6.0.2",
     "next": "16.4.3",
