@@ -175,6 +175,11 @@ export async function getGDriveFastDownload(fileId: string): Promise<{
 }
 
 /**
+ * Kompatibilitas alias untuk Turbopack cache
+ */
+export const getGDriveFileStream = getGDriveFastDownload;
+
+/**
  * Menghasilkan endpoint unduh langsung ke perangkat lokal (Downloads)
  * Alih-alih dialihkan ke situs web Google Drive
  */
