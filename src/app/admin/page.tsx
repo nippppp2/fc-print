@@ -206,7 +206,7 @@ export default function AdminDashboardPage() {
       .then((data) => {
         if (data?.role) setUserRole(data.role);
       })
-      .catch(() => {});
+      .catch(() => { });
 
     // 2. Ambil informasi toko
     fetch('/api/admin/settings')
@@ -214,7 +214,7 @@ export default function AdminDashboardPage() {
       .then((data) => {
         if (data?.settings) setSettings(data.settings);
       })
-      .catch(() => {});
+      .catch(() => { });
 
     fetchOrders();
     const interval = setInterval(() => {
@@ -402,10 +402,10 @@ export default function AdminDashboardPage() {
       order.status === 'READY'
         ? '#84cc16'
         : order.status === 'PRINTING'
-        ? '#0284c7'
-        : order.status === 'COMPLETED'
-        ? '#94a3b8'
-        : '#f59e0b';
+          ? '#0284c7'
+          : order.status === 'COMPLETED'
+            ? '#94a3b8'
+            : '#f59e0b';
 
     const isFinalStatus = order.status === 'COMPLETED' || order.status === 'CANCELLED';
 
