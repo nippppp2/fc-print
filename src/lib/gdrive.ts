@@ -145,37 +145,32 @@ export async function sendGDriveChunk(
 }
 
 /**
- * Mendapatkan file stream dari Google Drive untuk diunduh kasir/admin
+ * Mengambil response stream langsung dari Google Drive dengan performa maksimal (Zero-copy native streaming)
+ * Mengeliminasi delay request metadata dan overhead pemrosesan Axios
  */
-export async function getGDriveFileStream(fileId: string): Promise<{
-  stream: Readable;
+export async function getGDriveFastDownload(fileId: string): Promise<{
+  body: ReadableStream<Uint8Array> | null;
   contentType: string;
-  name: string;
+  contentLength?: string | null;
 }> {
-  const drive = getDriveClient();
-  if (!drive) {
-    throw new Error('Google Drive belum dikonfigurasi');
-  }
+  const accessToken = await getGoogleAccessToken();
+  const driveUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`;
 
-  // Ambil metadata file
-  const metaRes = await drive.files.get({
-    fileId,
-    fields: 'id, name, mimeType, webViewLink, webContentLink',
+  const driveRes = await fetch(driveUrl, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
 
-  const name = metaRes.data.name || 'document';
-  const contentType = metaRes.data.mimeType || 'application/octet-stream';
-
-  // Ambil isi binary file sebagai stream
-  const fileRes = await drive.files.get(
-    { fileId, alt: 'media' },
-    { responseType: 'stream' }
-  );
+  if (!driveRes.ok) {
+    const errorText = await driveRes.text();
+    throw new Error(`Google Drive stream error (${driveRes.status}): ${errorText}`);
+  }
 
   return {
-    stream: fileRes.data as Readable,
-    contentType,
-    name,
+    body: driveRes.body,
+    contentType: driveRes.headers.get('content-type') || 'application/octet-stream',
+    contentLength: driveRes.headers.get('content-length'),
   };
 }
 

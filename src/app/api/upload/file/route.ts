@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getGDriveFileStream } from '@/lib/gdrive';
+import { getGDriveFastDownload } from '@/lib/gdrive';
 
 export async function PUT(request: Request) {
   try {
@@ -53,28 +53,30 @@ export async function GET(request: Request) {
       return new NextResponse('Storage key tidak ditemukan', { status: 400 });
     }
 
-    // Jika file tersimpan di Google Drive, stream langsung dari Google Drive
+    // Jika file tersimpan di Google Drive, stream langsung dari Google Drive dengan performa tinggi
     if (key.startsWith('gdrive:')) {
       const fileId = key.replace('gdrive:', '');
-      const { stream, contentType: gContentType, name: gName } = await getGDriveFileStream(fileId);
-      const webStream = new ReadableStream({
-        start(controller) {
-          stream.on('data', (chunk) => controller.enqueue(chunk));
-          stream.on('end', () => controller.close());
-          stream.on('error', (err) => controller.error(err));
-        },
-      });
+      const { body, contentType, contentLength } = await getGDriveFastDownload(fileId);
 
-      const downloadFilename = filename || gName || 'dokumen';
+      if (!body) {
+        return new NextResponse('Gagal membaca aliran data dari Google Drive', { status: 502 });
+      }
+
+      const downloadFilename = filename || 'dokumen';
       const cleanFilename = downloadFilename.replace(/["\r\n]/g, '_');
       const encodedFilename = encodeURIComponent(downloadFilename);
 
-      return new NextResponse(webStream, {
-        headers: {
-          'Content-Type': gContentType || 'application/octet-stream',
-          'Content-Disposition': `attachment; filename="${cleanFilename}"; filename*=UTF-8''${encodedFilename}`,
-        },
-      });
+      const headers: Record<string, string> = {
+        'Content-Type': contentType,
+        'Content-Disposition': `attachment; filename="${cleanFilename}"; filename*=UTF-8''${encodedFilename}`,
+        'Cache-Control': 'private, max-age=3600',
+      };
+
+      if (contentLength) {
+        headers['Content-Length'] = contentLength;
+      }
+
+      return new NextResponse(body, { headers });
     }
 
     const fileBlob = await db.getFileBlob(key);
