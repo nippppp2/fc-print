@@ -25,7 +25,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const { sessionUri } = await initiateGDriveResumableUpload(filename, fileType, fileSize);
+    const origin = request.headers.get('origin');
+    const { sessionUri } = await initiateGDriveResumableUpload(filename, fileType, fileSize, origin);
 
     return NextResponse.json({
       success: true,
@@ -35,6 +36,20 @@ export async function POST(request: Request) {
     console.error('Error initiating Google Drive upload:', err);
     const message = err instanceof Error ? err.message : 'Gagal memulai unggahan Google Drive';
     return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const { fileId } = body;
+    if (fileId) {
+      await ensureGDriveFilePublic(fileId);
+    }
+    return NextResponse.json({ success: true });
+  } catch (err: unknown) {
+    console.warn('Gagal menyetel permission publik file:', err);
+    return NextResponse.json({ success: false });
   }
 }
 

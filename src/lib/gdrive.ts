@@ -64,7 +64,8 @@ async function getGoogleAccessToken(): Promise<string> {
 export async function initiateGDriveResumableUpload(
   filename: string,
   fileType: string,
-  fileSize?: number
+  fileSize?: number,
+  origin?: string | null
 ): Promise<{ sessionUri: string }> {
   const accessToken = await getGoogleAccessToken();
 
@@ -85,6 +86,10 @@ export async function initiateGDriveResumableUpload(
 
   if (fileSize && fileSize > 0) {
     headers['X-Upload-Content-Length'] = fileSize.toString();
+  }
+
+  if (origin) {
+    headers['Origin'] = origin;
   }
 
   const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {

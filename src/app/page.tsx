@@ -220,7 +220,7 @@ export default function CustomerUploadPage() {
         const presignData = await presignRes.json();
 
         if (presignData.provider === 'gdrive') {
-          // Upload ke Google Drive via Resumable Chunked Upload (3 MB per chunk)
+          // 1. Minta sessionUri aman dari server
           const initRes = await fetch('/api/upload/gdrive', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -237,47 +237,56 @@ export default function CustomerUploadPage() {
           }
 
           const { sessionUri } = await initRes.json();
-          const CHUNK_SIZE = 3 * 1024 * 1024; // 3 MB (kelipatan 256 KiB untuk Google Drive API)
+          // Chunk size 8 MB (32 * 256 KiB) untuk kecepatan maksimal & request minimal
+          const CHUNK_SIZE = 8 * 1024 * 1024;
           const totalBytes = item.fileSizeBytes;
           let offset = 0;
-          let finalStorageKey = '';
+          let finalFileId = '';
 
           while (offset < totalBytes) {
             const nextOffset = Math.min(offset + CHUNK_SIZE, totalBytes);
             const chunkBlob = item.file.slice(offset, nextOffset);
             const contentRange = `bytes ${offset}-${nextOffset - 1}/${totalBytes}`;
 
-            const chunkRes = await fetch('/api/upload/gdrive', {
+            // Upload LANGSUNG dari browser ke Google Drive (Direct-to-Google tanpa perantara Netlify)
+            const chunkRes = await fetch(sessionUri, {
               method: 'PUT',
               headers: {
-                'x-session-uri': sessionUri,
-                'content-range': contentRange,
+                'Content-Range': contentRange,
               },
               body: chunkBlob,
             });
 
-            if (!chunkRes.ok) {
-              const err = await chunkRes.json();
-              throw new Error(err.error || `Gagal mengirim data ${item.originalFilename} ke Google Drive`);
+            if (chunkRes.status === 200 || chunkRes.status === 201) {
+              const chunkData = await chunkRes.json();
+              finalFileId = chunkData.id;
+              offset = totalBytes;
+              break;
+            } else if (chunkRes.status === 308) {
+              offset = nextOffset;
+            } else {
+              const errText = await chunkRes.text();
+              throw new Error(`Gagal mengirim data ke Google Drive (${chunkRes.status}): ${errText}`);
             }
-
-            const chunkData = await chunkRes.json();
-            offset = nextOffset;
 
             // Progres upload yang halus
             const filePercent = offset / totalBytes;
             const overallProgress = Math.round(((i + filePercent) / totalSteps) * 85);
             setUploadProgress(overallProgress);
+          }
 
-            if (chunkData.status === 'complete' && chunkData.storageKey) {
-              finalStorageKey = chunkData.storageKey;
-              break;
-            }
+          // Pastikan permission publik aktif untuk unduhan kasir
+          if (finalFileId) {
+            fetch('/api/upload/gdrive', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fileId: finalFileId }),
+            }).catch(() => {});
           }
 
           uploadedFiles.push({
             originalFilename: item.originalFilename,
-            storageKey: finalStorageKey,
+            storageKey: `gdrive:${finalFileId}`,
             fileType: item.fileType,
             fileSizeBytes: item.fileSizeBytes,
           });
